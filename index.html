@@ -5,11 +5,26 @@
 <title>Panel zadań</title>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } 
-from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot } 
-from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { 
+  initializeApp 
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+
+import { 
+  getAuth, 
+  signInWithEmailAndPassword, 
+  onAuthStateChanged, 
+  signOut 
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+import { 
+  getFirestore, 
+  collection, 
+  addDoc, 
+  query, 
+  where, 
+  orderBy, 
+  onSnapshot 
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 /* 🔥 WKLEJ SWÓJ firebaseConfig */
 const firebaseConfig = {
@@ -124,6 +139,13 @@ function loadTasks() {
         });
     });
 }
+
+/* ===== WYLOGOWANIE ===== */
+window.logout = async () => {
+    await signOut(auth);
+    location.reload(); // powrót do ekranu logowania
+};
+
 </script>
 
 <style>
@@ -149,6 +171,7 @@ body { font-family: Arial; background:#f2f2f2; padding:30px }
 <div class="box hidden" id="panel">
 <h2>Panel</h2>
 Zalogowano jako: <b id="user"></b>
+<button onclick="logout()" style="float:right">Wyloguj</button>
 
 <div id="admin" class="hidden">
 <hr>
@@ -172,3 +195,4 @@ Zalogowano jako: <b id="user"></b>
 
 </body>
 </html>
+
