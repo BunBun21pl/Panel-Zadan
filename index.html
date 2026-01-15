@@ -2,12 +2,16 @@
 <html lang="pl">
 <head>
 <meta charset="UTF-8">
-<title>Logowanie</title>
+<title>Panel zadań</title>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } 
+from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot } 
+from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-/* 🔥 TU WKLEJ SWÓJ firebaseConfig */
+/* 🔥 WKLEJ SWÓJ firebaseConfig */
 const firebaseConfig = {
   apiKey: "AIzaSyACzVKOmFK87VJJvBGCW921yrxbpKgYEKU",
   authDomain: "iiitla-zadania.firebaseapp.com",
@@ -20,26 +24,115 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const db = getFirestore(app);
 
+let currentLogin = null;
+
+/* ===== LOGOWANIE ===== */
 window.login = async () => {
-    const email = document.getElementById("login").value + "@3tla.local";
+    const login = document.getElementById("login").value.trim();
     const password = document.getElementById("password").value;
     const error = document.getElementById("error");
 
     try {
-        await signInWithEmailAndPassword(auth, email, password);
-        document.getElementById("loginBox").style.display = "none";
-        document.getElementById("panel").style.display = "block";
-        document.getElementById("user").innerText = email.split("@")[0];
-    } catch (e) {
+        await signInWithEmailAndPassword(
+            auth,
+            login + "@3tla.local",
+            password
+        );
+    } catch {
         error.innerText = "Błędny login lub hasło";
     }
 };
+
+/* ===== STAN LOGOWANIA ===== */
+onAuthStateChanged(auth, user => {
+    if (!user) return;
+
+    currentLogin = user.email.split("@")[0];
+
+    document.getElementById("loginBox").style.display = "none";
+    document.getElementById("panel").style.display = "block";
+    document.getElementById("user").innerText = currentLogin;
+
+    if (currentLogin === "mbecela") {
+        document.getElementById("admin").style.display = "block";
+        loadUsers();
+    }
+
+    loadTasks();
+});
+
+/* ===== LISTA UŻYTKOWNIKÓW ===== */
+function loadUsers() {
+    const users = [
+        "wbzowski","mchwalek","sciemny","sgawlikowski","wgawlowska",
+        "mkolodziej","gkrzeminska","okurpik","llipinska","mrak",
+        "irzemyk","frzesa","ssiudy","nsuska"
+    ];
+
+    const sel = document.getElementById("recipient");
+    users.forEach(u => {
+        const o = document.createElement("option");
+        o.value = u;
+        o.textContent = u;
+        sel.appendChild(o);
+    });
+}
+
+/* ===== FORMATOWANIE ===== */
+window.format = cmd => document.execCommand(cmd);
+
+/* ===== DODAWANIE ZADANIA ===== */
+window.addTask = async () => {
+    const text = document.getElementById("editor").innerHTML;
+    if (text.length > 2000) {
+        alert("Limit 2000 znaków");
+        return;
+    }
+
+    await addDoc(collection(db, "tasks"), {
+        from: "mbecela",
+        to: document.getElementById("recipient").value,
+        text: text,
+        time: Date.now()
+    });
+
+    document.getElementById("editor").innerHTML = "";
+};
+
+/* ===== WCZYTYWANIE ZADAŃ ===== */
+function loadTasks() {
+    const q = query(
+        collection(db, "tasks"),
+        where("to", "==", currentLogin),
+        where("from", "==", "mbecela"),
+        orderBy("time", "desc")
+    );
+
+    onSnapshot(q, snap => {
+        const box = document.getElementById("tasks");
+        box.innerHTML = "";
+
+        let i = 1;
+        snap.forEach(doc => {
+            const d = doc.data();
+            const div = document.createElement("div");
+            div.className = "task";
+            div.innerHTML = `<strong>Zadanie #${i++}</strong>${d.text}`;
+            box.appendChild(div);
+        });
+    });
+}
 </script>
 
 <style>
-body { font-family: Arial; background:#f2f2f2; padding:40px }
-.box { background:#fff; padding:20px; max-width:400px; margin:auto }
+body { font-family: Arial; background:#f2f2f2; padding:30px }
+.box { background:#fff; padding:20px; max-width:800px; margin:auto }
+.hidden { display:none }
+.editor { border:1px solid #ccc; min-height:120px; padding:10px }
+.toolbar button { margin-right:5px }
+.task { border-bottom:1px solid #ccc; padding:10px 0 }
 </style>
 </head>
 
@@ -53,11 +146,29 @@ body { font-family: Arial; background:#f2f2f2; padding:40px }
 <div id="error" style="color:red"></div>
 </div>
 
-<div class="box" id="panel" style="display:none">
-<h2>Zalogowano</h2>
-Użytkownik: <b id="user"></b>
+<div class="box hidden" id="panel">
+<h2>Panel</h2>
+Zalogowano jako: <b id="user"></b>
+
+<div id="admin" class="hidden">
+<hr>
+<h3>Nowe zadanie</h3>
+
+<select id="recipient"></select>
+
+<div class="toolbar">
+<button onclick="format('bold')"><b>B</b></button>
+<button onclick="format('italic')"><i>I</i></button>
+</div>
+
+<div id="editor" class="editor" contenteditable="true"></div>
+<button onclick="addTask()">Wyślij zadanie</button>
+</div>
+
+<hr>
+<h3>Twoje zadania</h3>
+<div id="tasks"></div>
 </div>
 
 </body>
 </html>
-
