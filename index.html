@@ -92,7 +92,7 @@ onAuthStateChanged(auth, user => {
   document.getElementById("user").innerText = user.email;
 
   const login = user.email.split("@")[0];
-  if (login === "mbecela@3tla.local@3tla.local") {
+  if (login === "mbecela@3tla.local") {
     document.getElementById("sender").style.display = "block";
   }
 
@@ -141,5 +141,6 @@ window.sendTask = async () => {
 
 </body>
 </html>
+
 
 
