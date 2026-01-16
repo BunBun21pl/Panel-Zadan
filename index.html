@@ -67,11 +67,16 @@ const db = getFirestore(app);
 /* ================= LOGIN ================= */
 
 window.login = async () => {
-  await signInWithEmailAndPassword(
-    auth,
-    email.value,
-    password.value
-  );
+  try {
+    await signInWithEmailAndPassword(
+      auth,
+      email.value.trim(),
+      password.value
+    );
+  } catch (e) {
+    alert("Błąd logowania: " + e.message);
+    console.error(e);
+  }
 };
 
 window.logout = async () => {
@@ -141,4 +146,5 @@ window.sendTask = async () => {
 
 </body>
 </html>
+
 
