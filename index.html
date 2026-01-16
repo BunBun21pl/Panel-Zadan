@@ -92,7 +92,7 @@ onAuthStateChanged(auth, user => {
   document.getElementById("user").innerText = user.email;
 
   const login = user.email.split("@")[0];
-  if (login === "mbecela@3tla.local") {
+  if (login === "mbecela") {
     document.getElementById("sender").style.display = "block";
   }
 
@@ -128,7 +128,7 @@ window.sendTask = async () => {
   const text = document.getElementById("task").innerHTML;
 
   await addDoc(collection(db, "tasks"), {
-    from: "mbecela@3tla.local",
+    from: "mbecela",
     to: to,
     text: text,
     created: serverTimestamp()
@@ -141,6 +141,7 @@ window.sendTask = async () => {
 
 </body>
 </html>
+
 
 
 
