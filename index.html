@@ -2,64 +2,56 @@
 <html lang="pl">
 <head>
 <meta charset="UTF-8">
-<title>Zadania</title>
+<title>Panel Zadań</title>
+<style>
+body { font-family: Arial; max-width: 800px; margin: auto; }
+.hidden { display: none; }
+textarea { width: 100%; height: 120px; }
+.task { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
+</style>
 </head>
 <body>
 
-<h2>Logowanie</h2>
+<h1>Panel Zadań</h1>
+
+<!-- LOGIN -->
 <div id="loginBox">
-  Login: <input id="login"><br>
-  Hasło: <input id="password" type="password"><br><br>
+  <input id="email" placeholder="email">
+  <input id="password" type="password" placeholder="hasło">
   <button onclick="login()">Zaloguj</button>
 </div>
 
-<div id="panel" style="display:none">
-  Zalogowano jako: <b id="user"></b>
+<!-- PANEL -->
+<div id="panel" class="hidden">
+  Zalogowano jako: <b id="who"></b>
   <button onclick="logout()">Wyloguj</button>
 
   <hr>
 
-  <!-- PANEL WYSYŁANIA (TYLKO mbecela) -->
-  <div id="sender" style="display:none">
-    <h3>Wyślij zadanie</h3>
+  <h3>Wyślij zadanie (TYLKO mbecela)</h3>
+  <input id="to" placeholder="login odbiorcy">
+  <textarea id="text" maxlength="2000"></textarea>
+  <br>
+  <button onclick="sendTask()">Wyślij</button>
 
-    <select id="to">
-      <option value="frzęsa">frzęsa</option>
-      <option value="wbzowski">wbzowski</option>
-      <option value="mchwałek">mchwałek</option>
-      <option value="sciemny">sciemny</option>
-      <option value="sgawlikowski">sgawlikowski</option>
-      <option value="wgawlowska">wgawlowska</option>
-      <option value="mkolodziej">mkolodziej</option>
-      <option value="gkrzemińska">gkrzemińska</option>
-      <option value="okurpik">okurpik</option>
-      <option value="llipińska">llipińska</option>
-      <option value="mrak">mrak</option>
-      <option value="irzemyk">irzemyk</option>
-      <option value="ssiudy">ssiudy</option>
-      <option value="nsuska">nsuska</option>
-    </select><br><br>
-
-    <div id="task" contenteditable="true"
-      style="border:1px solid black; min-height:100px;"></div><br>
-
-    <button onclick="sendTask()">Wyślij</button>
-    <hr>
-  </div>
+  <hr>
 
   <h3>Twoje zadania</h3>
   <div id="tasks"></div>
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
-  from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import {
-  getFirestore, collection, addDoc, query, where, orderBy, getDocs, serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+/* ================= FIREBASE ================= */
 
-/* ===== TU WKLEJ SWOJE DANE Z FIREBASE ===== */
+// 🔴 TU WKLEJ SWOJĄ KONFIGURACJĘ
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } 
+from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp } 
+from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
 const firebaseConfig = {
   apiKey: "AIzaSyACzVKOmFK87VJJvBGCW921yrxbpKgYEKU",
   authDomain: "iiitla-zadania.firebaseapp.com",
@@ -69,81 +61,84 @@ const firebaseConfig = {
   appId: "1:753248383455:web:f39ab717514c979913146a",
   measurementId: "G-9DQCJ8T5QQ"
 };
-/* ======================================== */
 
 const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-/* LOGOWANIE */
+/* ================= LOGIN ================= */
+
 window.login = async () => {
-  const login = document.getElementById("login").value.trim();
-  const pass = document.getElementById("password").value;
-  await signInWithEmailAndPassword(auth, login + "@3tla.local", pass);
+  await signInWithEmailAndPassword(
+    auth,
+    email.value,
+    password.value
+  );
 };
 
-/* WYLOGOWANIE */
 window.logout = async () => {
   await signOut(auth);
-  location.reload();
 };
 
-/* PO ZALOGOWANIU */
 onAuthStateChanged(auth, user => {
-  if (!user) return;
+  if (!user) {
+    loginBox.classList.remove("hidden");
+    panel.classList.add("hidden");
+    return;
+  }
 
   const login = user.email.split("@")[0];
 
-  document.getElementById("loginBox").style.display = "none";
-  document.getElementById("panel").style.display = "block";
-  document.getElementById("user").innerText = login;
-
-  if (login === "mbecela") {
-    document.getElementById("sender").style.display = "block";
-  }
+  who.textContent = login;
+  loginBox.classList.add("hidden");
+  panel.classList.remove("hidden");
 
   loadTasks(login);
 });
 
-/* WCZYTYWANIE ZADAŃ */
-async function loadTasks(login) {
+/* ================= ZADANIA ================= */
+
+function loadTasks(login) {
   const q = query(
     collection(db, "tasks"),
     where("to", "==", login),
     orderBy("created", "desc")
   );
 
-  const snap = await getDocs(q);
-  const box = document.getElementById("tasks");
-  box.innerHTML = "";
-
-  let i = 1;
-  snap.forEach(doc => {
-    const t = doc.data();
-    box.innerHTML += `
-      <div>
-        <b>${i++}. Od ${t.from}</b><br>
-        ${t.text}
-        <hr>
-      </div>
-    `;
+  onSnapshot(q, snap => {
+    tasks.innerHTML = "";
+    let i = 1;
+    snap.forEach(d => {
+      const t = d.data();
+      tasks.innerHTML += `
+        <div class="task">
+          <b>#${i++}</b><br>
+          Od: ${t.from}<br><br>
+          ${t.text}
+        </div>
+      `;
+    });
   });
 }
 
-/* WYSYŁANIE ZADAŃ */
 window.sendTask = async () => {
-  const to = document.getElementById("to").value.trim();
-  const text = document.getElementById("task").innerHTML;
+  const user = auth.currentUser;
+  const login = user.email.split("@")[0];
+
+  if (login !== "mbecela") {
+    alert("Tylko mbecela może wysyłać zadania");
+    return;
+  }
 
   await addDoc(collection(db, "tasks"), {
     from: "mbecela",
-    to: to,
-    text: text,
+    to: to.value.trim(),
+    text: text.value,
     created: serverTimestamp()
   });
 
-  document.getElementById("task").innerHTML = "";
-  alert("Zadanie wysłane");
+  text.value = "";
 };
 </script>
 
