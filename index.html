@@ -4,17 +4,28 @@
 <meta charset="UTF-8">
 <title>Panel Zadań</title>
 <style>
-body { font-family: Arial; max-width: 800px; margin: auto; }
+body {
+  font-family: Arial, sans-serif;
+  max-width: 800px;
+  margin: auto;
+}
 .hidden { display: none; }
-textarea { width: 100%; height: 120px; }
-.task { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
+textarea {
+  width: 100%;
+  height: 140px;
+}
+.task {
+  border: 1px solid #ccc;
+  padding: 10px;
+  margin: 10px 0;
+}
 </style>
 </head>
 <body>
 
 <h1>Panel Zadań</h1>
 
-<!-- LOGIN -->
+<!-- LOGOWANIE -->
 <div id="loginBox">
   <input id="email" placeholder="email">
   <input id="password" type="password" placeholder="hasło">
@@ -30,6 +41,7 @@ textarea { width: 100%; height: 120px; }
 
   <h3>Wyślij zadanie (TYLKO mbecela)</h3>
   <input id="to" placeholder="login odbiorcy">
+  <br><br>
   <textarea id="text" maxlength="2000"></textarea>
   <br>
   <button onclick="sendTask()">Wyślij</button>
@@ -43,13 +55,25 @@ textarea { width: 100%; height: 120px; }
 <script type="module">
 /* ================= FIREBASE ================= */
 
-// 🔴 TU WKLEJ SWOJĄ KONFIGURACJĘ
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } 
-from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp } 
-from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+/* 🔴 TU WKLEJ SWOJE DANE */
 const firebaseConfig = {
   apiKey: "AIzaSyACzVKOmFK87VJJvBGCW921yrxbpKgYEKU",
   authDomain: "iiitla-zadania.firebaseapp.com",
@@ -64,7 +88,21 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-/* ================= LOGIN ================= */
+/* ================= NORMALIZACJA LOGINU ================= */
+
+/*function normalizeLogin(str) {
+  return str
+    .normalize("NFKD")                 // rozbij znaki unicode
+    .replace(/ł/g, "l")
+    .replace(/Ł/g, "l")
+    .replace(/ń/g, "n")
+    .replace(/Ń/g, "n")
+    .replace(/[\u0300-\u036f]/g, "")   // usuń znaki łączące
+    .toLowerCase()
+    .trim();
+} */
+
+/* ================= LOGOWANIE ================= */
 
 window.login = async () => {
   try {
@@ -90,9 +128,11 @@ onAuthStateChanged(auth, user => {
     return;
   }
 
-  const login = user.email.split("@")[0];
+  const rawLogin = user.email.split("@")[0];
+  const login = normalizeLogin(rawLogin);
 
-  who.textContent = login;
+  who.textContent = rawLogin;
+
   loginBox.classList.add("hidden");
   panel.classList.remove("hidden");
 
@@ -111,8 +151,9 @@ function loadTasks(login) {
   onSnapshot(q, snap => {
     tasks.innerHTML = "";
     let i = 1;
-    snap.forEach(d => {
-      const t = d.data();
+
+    snap.forEach(doc => {
+      const t = doc.data();
       tasks.innerHTML += `
         <div class="task">
           <b>#${i++}</b><br>
@@ -126,16 +167,18 @@ function loadTasks(login) {
 
 window.sendTask = async () => {
   const user = auth.currentUser;
-  const login = user.email.split("@")[0];
+  const sender = normalizeLogin(user.email.split("@")[0]);
 
-  if (login !== "mbecela") {
+  if (sender !== "mbecela") {
     alert("Tylko mbecela może wysyłać zadania");
     return;
   }
 
+  const target = normalizeLogin(to.value);
+
   await addDoc(collection(db, "tasks"), {
     from: "mbecela",
-    to: to.value.trim(),
+    to: target,
     text: text.value,
     created: serverTimestamp()
   });
@@ -146,5 +189,3 @@ window.sendTask = async () => {
 
 </body>
 </html>
-
-
