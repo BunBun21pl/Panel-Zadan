@@ -1,191 +1,198 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-<meta charset="UTF-8">
-<title>Panel Zadań</title>
-<style>
-body {
-  font-family: Arial, sans-serif;
-  max-width: 800px;
-  margin: auto;
-}
-.hidden { display: none; }
-textarea {
-  width: 100%;
-  height: 140px;
-}
-.task {
-  border: 1px solid #ccc;
-  padding: 10px;
-  margin: 10px 0;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikacja Zadania</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        #login-section, #app-section { border: 1px solid #ccc; padding: 20px; margin-bottom: 20px; }
+        button { margin-top: 10px; }
+        .task { border-bottom: 1px solid #eee; padding: 10px; }
+        .bold { font-weight: bold; } /* Dla fallback, ale użyjemy marked */
+    </style>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"></script>
+    <!-- Marked dla Markdown (pogrubienie itd.) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@4.0.0/marked.min.js"></script>
 </head>
 <body>
 
-<h1>Panel Zadań</h1>
+    <h1>Aplikacja Zadania</h1>
 
-<!-- LOGOWANIE -->
-<div id="loginBox">
-  <input id="email" placeholder="email">
-  <input id="password" type="password" placeholder="hasło">
-  <button onclick="login()">Zaloguj</button>
-</div>
+    <div id="login-section">
+        <h2>Logowanie</h2>
+        <input type="email" id="email" placeholder="Email">
+        <input type="password" id="password" placeholder="Hasło">
+        <button onclick="login()">Zaloguj</button>
+        <p id="login-error"></p>
+    </div>
 
-<!-- PANEL -->
-<div id="panel" class="hidden">
-  Zalogowano jako: <b id="who"></b>
-  <button onclick="logout()">Wyloguj</button>
+    <div id="app-section" style="display: none;">
+        <h2>Witaj, <span id="user-name"></span>!</h2>
+        <button onclick="logout()">Wyloguj</button>
 
-  <hr>
-
-  <h3>Wyślij zadanie (TYLKO mbecela)</h3>
-  <input id="to" placeholder="login odbiorcy">
-  <br><br>
-  <textarea id="text" maxlength="2000"></textarea>
-  <br>
-  <button onclick="sendTask()">Wyślij</button>
-
-  <hr>
-
-  <h3>Twoje zadania</h3>
-  <div id="tasks"></div>
-</div>
-
-<script type="module">
-/* ================= FIREBASE ================= */
-
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import {
-  getAuth,
-  signInWithEmailAndPassword,
-  onAuthStateChanged,
-  signOut
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-  serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
-/* 🔴 TU WKLEJ SWOJE DANE */
-const firebaseConfig = {
-  apiKey: "AIzaSyACzVKOmFK87VJJvBGCW921yrxbpKgYEKU",
-  authDomain: "iiitla-zadania.firebaseapp.com",
-  projectId: "iiitla-zadania",
-  storageBucket: "iiitla-zadania.firebasestorage.app",
-  messagingSenderId: "753248383455",
-  appId: "1:753248383455:web:f39ab717514c979913146a",
-  measurementId: "G-9DQCJ8T5QQ"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-
-/* ================= NORMALIZACJA LOGINU ================= */
-
-/*function normalizeLogin(str) {
-  return str
-    .normalize("NFKD")                 // rozbij znaki unicode
-    .replace(/ł/g, "l")
-    .replace(/Ł/g, "l")
-    .replace(/ń/g, "n")
-    .replace(/Ń/g, "n")
-    .replace(/[\u0300-\u036f]/g, "")   // usuń znaki łączące
-    .toLowerCase()
-    .trim();
-} */
-
-/* ================= LOGOWANIE ================= */
-
-window.login = async () => {
-  try {
-    await signInWithEmailAndPassword(
-      auth,
-      email.value.trim(),
-      password.value
-    );
-  } catch (e) {
-    alert("Błąd logowania: " + e.message);
-    console.error(e);
-  }
-};
-
-window.logout = async () => {
-  await signOut(auth);
-};
-
-onAuthStateChanged(auth, user => {
-  if (!user) {
-    loginBox.classList.remove("hidden");
-    panel.classList.add("hidden");
-    return;
-  }
-
-  const rawLogin = user.email.split("@")[0];
-  const login = normalizeLogin(rawLogin);
-
-  who.textContent = rawLogin;
-
-  loginBox.classList.add("hidden");
-  panel.classList.remove("hidden");
-
-  loadTasks(login);
-});
-
-/* ================= ZADANIA ================= */
-
-function loadTasks(login) {
-  const q = query(
-    collection(db, "tasks"),
-    where("to", "==", login),
-    orderBy("created", "desc")
-  );
-
-  onSnapshot(q, snap => {
-    tasks.innerHTML = "";
-    let i = 1;
-
-    snap.forEach(doc => {
-      const t = doc.data();
-      tasks.innerHTML += `
-        <div class="task">
-          <b>#${i++}</b><br>
-          Od: ${t.from}<br><br>
-          ${t.text}
+        <div id="sender-section" style="display: none;">
+            <h3>Wysyłanie zadania</h3>
+            <select id="recipient">
+                <!-- Hardcoded lista użytkowników – zmień na swoje -->
+                <option value="wbzowski@3tla.local">wbzowski</option>
+                <option value="mchwałek@3tla.local">mchwałek</option>
+                <option value="sciemny@3tla.local">sciemny</option>
+                <option value="sgawlikowski@3tla.local">sgawlikowski</option>
+                <option value="wgawlowska@3tla.local">wgawlowska</option>
+                <option value="mkolodziej@3tla.local">mkolodziej</option>
+                <option value="gkrzemińska@3tla.local">gkrzemińska</option>
+                <option value="okurpik@3tla.local">okurpik</option>
+                <option value="llipińska@3tla.local">llipińska</option>
+                <option value="mrak@3tla.local">mrak</option>
+                <option value="irzemyk@3tla.local">irzemyk</option>
+                <option value="frzęsa@3tla.local">frzęsa</option>
+                <option value="ssiudy@3tla.local">ssiudy</option>
+                <option value="nsuska@3tla.local">nsuska</option>
+                <!-- Dodaj więcej -->
+            </select>
+            <textarea id="task-text" placeholder="Wpisz zadanie. Użyj **tekst** dla pogrubienia."></textarea>
+            <button onclick="sendTask()">Wyślij</button>
         </div>
-      `;
-    });
-  });
-}
 
-window.sendTask = async () => {
-  const user = auth.currentUser;
-  const sender = normalizeLogin(user.email.split("@")[0]);
+        <div id="receiver-section">
+            <h3>Twoje zadania</h3>
+            <div id="tasks-list"></div>
+        </div>
 
-  if (sender !== "mbecela") {
-    alert("Tylko mbecela może wysyłać zadania");
-    return;
-  }
+        <div id="grader-section" style="display: none;">
+            <h3>Ocenianie zadań</h3>
+            <div id="sent-tasks-list"></div>
+            <button onclick="downloadGrades()">Pobierz plik z ocenami</button>
+        </div>
+    </div>
 
-  const target = normalizeLogin(to.value);
+    <script>
+        // Wklej tu swoją konfigurację Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyACzVKOmFK87VJJvBGCW921yrxbpKgYEKU",
+            authDomain: "iiitla-zadania.firebaseapp.com",
+            projectId: "iiitla-zadania",
+            storageBucket: "iiitla-zadania.firebasestorage.app",
+            messagingSenderId: "753248383455",
+            appId: "1:753248383455:web:f39ab717514c979913146a",
+            measurementId: "G-9DQCJ8T5QQ"
+        };
 
-  await addDoc(collection(db, "tasks"), {
-    from: "mbecela",
-    to: target,
-    text: text.value,
-    created: serverTimestamp()
-  });
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
 
-  text.value = "";
-};
-</script>
+        let currentUser = null;
+        let grades = {}; // Tymczasowe oceny {taskId: ocena}
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                currentUser = user;
+                document.getElementById('login-section').style.display = 'none';
+                document.getElementById('app-section').style.display = 'block';
+                document.getElementById('user-name').innerText = user.email;
+
+                if (user.email === 'mbecela@3tla.local') { // Zmodyfikuj na Twój email
+                    document.getElementById('sender-section').style.display = 'block';
+                    document.getElementById('grader-section').style.display = 'block';
+                    loadSentTasks();
+                }
+                loadTasks();
+            } else {
+                document.getElementById('login-section').style.display = 'block';
+                document.getElementById('app-section').style.display = 'none';
+            }
+        });
+
+        function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            auth.signInWithEmailAndPassword(email, password)
+                .catch(error => {
+                    document.getElementById('login-error').innerText = 'Błąd: ' + error.message;
+                });
+        }
+
+        function logout() {
+            auth.signOut();
+        }
+
+        function sendTask() {
+            const recipient = document.getElementById('recipient').value;
+            const text = document.getElementById('task-text').value;
+            if (!text || !recipient) return alert('Wypełnij pola!');
+
+            db.collection('tasks').add({
+                sender: currentUser.email,
+                recipient: recipient,
+                text: text,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                grade: null
+            }).then(() => {
+                alert('Zadanie wysłane!');
+                document.getElementById('task-text').value = '';
+            }).catch(error => alert('Błąd: ' + error));
+        }
+
+        function loadTasks() {
+            const tasksList = document.getElementById('tasks-list');
+            tasksList.innerHTML = '';
+            db.collection('tasks').where('recipient', '==', currentUser.email).orderBy('timestamp', 'desc').get()
+                .then(snapshot => {
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        const taskDiv = document.createElement('div');
+                        taskDiv.classList.add('task');
+                        taskDiv.innerHTML = `<p>Od: ${data.sender}</p><div>${marked.parse(data.text)}</div><p>Ocena: ${data.grade || 'Brak'}</p>`;
+                        tasksList.appendChild(taskDiv);
+                    });
+                });
+        }
+
+        function loadSentTasks() {
+            const sentTasksList = document.getElementById('sent-tasks-list');
+            sentTasksList.innerHTML = '';
+            db.collection('tasks').where('sender', '==', currentUser.email).orderBy('timestamp', 'desc').get()
+                .then(snapshot => {
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        const taskDiv = document.createElement('div');
+                        taskDiv.classList.add('task');
+                        taskDiv.innerHTML = `
+                            <p>Do: ${data.recipient}</p>
+                            <div>${marked.parse(data.text)}</div>
+                            <input type="text" placeholder="Wpisz ocenę" onchange="setGrade('${doc.id}', this.value)">
+                            <p>Aktualna: ${data.grade || 'Brak'}</p>
+                        `;
+                        sentTasksList.appendChild(taskDiv);
+                    });
+                });
+        }
+
+        function setGrade(taskId, grade) {
+            grades[taskId] = grade;
+            // Opcjonalnie: Zapisz do bazy natychmiast
+            db.collection('tasks').doc(taskId).update({ grade: grade });
+        }
+
+        function downloadGrades() {
+            let content = 'Oceny zadań:\n\n';
+            Object.keys(grades).forEach(taskId => {
+                content += `Zadanie ID: ${taskId}, Ocena: ${grades[taskId]}\n`;
+            });
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'oceny.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
 
 </body>
 </html>
