@@ -22,20 +22,20 @@
   <div id="sender" style="display:none">
     <h3>Wyślij zadanie</h3>
     <select id="to">
-      <option>wbzowski</option>
-      <option>mchwałek</option>
-      <option>sciemny</option>
-      <option>sgawlikowski</option>
-      <option>wgawlowska</option>
-      <option>mkolodziej</option>
-      <option>gkrzemińska</option>
-      <option>okurpik</option>
-      <option>llipińska</option>
-      <option>mrak</option>
-      <option>irzemyk</option>
-      <option>frzęsa</option>
-      <option>ssiudy</option>
-      <option>nsuska</option>
+      <option>wbzowski@3tla.local</option>
+      <option>mchwałek@3tla.local</option>
+      <option>sciemny@3tla.local</option>
+      <option>sgawlikowski@3tla.local</option>
+      <option>wgawlowska@3tla.local</option>
+      <option>mkolodziej@3tla.local</option>
+      <option>gkrzemińska@3tla.local</option>
+      <option>okurpik@3tla.local</option>
+      <option>llipińska@3tla.local</option>
+      <option>mrak@3tla.local</option>
+      <option>irzemyk@3tla.local</option>
+      <option>frzęsa@3tla.local</option>
+      <option>ssiudy@3tla.local</option>
+      <option>nsuska@3tla.local</option>
     </select><br><br>
 
     <div id="task" contenteditable="true"
@@ -92,7 +92,7 @@ onAuthStateChanged(auth, user => {
   document.getElementById("user").innerText = user.email;
 
   const login = user.email.split("@")[0];
-  if (login === "mbecela") {
+  if (login === "mbecela@3tla.local@3tla.local") {
     document.getElementById("sender").style.display = "block";
   }
 
@@ -128,7 +128,7 @@ window.sendTask = async () => {
   const text = document.getElementById("task").innerHTML;
 
   await addDoc(collection(db, "tasks"), {
-    from: "mbecela",
+    from: "mbecela@3tla.local",
     to: to,
     text: text,
     created: serverTimestamp()
@@ -141,4 +141,5 @@ window.sendTask = async () => {
 
 </body>
 </html>
+
 
