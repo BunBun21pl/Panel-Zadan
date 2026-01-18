@@ -1,190 +1,190 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>System Zadaniowy</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .hidden { display: none; }
-        textarea { width: 100%; height: 200px; }
-        #task-list { margin-top: 20px; }
-        .task { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
-        .bold { font-weight: bold; }
-    </style>
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Zadania 3tla</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    .hidden { display: none; }
+    input, textarea { display: block; width: 100%; margin: 0.8rem 0; padding: 0.6rem; box-sizing: border-box; }
+    button { padding: 0.7rem 1.4rem; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #0055aa; }
+    .task { border: 1px solid #ddd; padding: 1rem; margin: 1rem 0; border-radius: 6px; background: #fafafa; }
+    .bold { font-weight: 700; }
+    #error { color: #c00; margin: 0.5rem 0; min-height: 1.2rem; }
+  </style>
+
+  <!-- Firebase v10 modular (najnowsze podejście) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc, collection } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+    // ────────────────────────────────────────────────
+    //  TU WPISZ SWOJĄ KONFIGURACJĘ (z konsoli Firebase)
+    // ────────────────────────────────────────────────
+    const firebaseConfig = {
+      apiKey: "AIzaSyACzVKOmFK87VJJvBGCW921yrxbpKgYEKU",
+      authDomain: "iiitla-zadania.firebaseapp.com",
+      projectId: "iiitla-zadania",
+      storageBucket: "iiitla-zadania.firebasestorage.app",
+      messagingSenderId: "753248383455",
+      appId: "1:753248383455:web:f39ab717514c979913146a",
+      measurementId: "G-9DQCJ8T5QQ"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const ADMIN_EMAIL = "mbecela@3tla.local";
+
+    // ──── Helper ─────────────────────────────────────
+    const $ = id => document.getElementById(id);
+    const show = el => el.classList.remove("hidden");
+    const hide = el => el.classList.add("hidden");
+
+    // ──── Logowanie ──────────────────────────────────
+    window.login = async () => {
+      const email = $("email").value.trim();
+      const password = $("password").value;
+      const errorEl = $("login-error");
+
+      if (!email.endsWith("@3tla.local")) {
+        errorEl.textContent = "Email musi kończyć się na @3tla.local";
+        return;
+      }
+
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        // sukces → onAuthStateChanged załatwi resztę
+      } catch (err) {
+        let msg = "Błąd logowania";
+        if (err.code === "auth/invalid-email")      msg = "Nieprawidłowy format email";
+        else if (err.code === "auth/user-not-found") msg = "Użytkownik nie istnieje";
+        else if (err.code === "auth/wrong-password") msg = "Nieprawidłowe hasło";
+        else if (err.code)                           msg = err.code.replace("auth/", "").replace(/-/g, " ");
+        else                                         msg += `: ${err.message}`;
+        
+        errorEl.textContent = msg;
+      }
+    };
+
+    // ──── Wylogowanie ────────────────────────────────
+    window.logout = async () => {
+      await signOut(auth);
+    };
+
+    // ──── Wysyłanie zadania (admin) ──────────────────
+    window.sendTask = async () => {
+      const target = $("target-email").value.trim();
+      const text = $("task-message").value.trim();
+      const errorEl = $("send-error");
+
+      if (!target.endsWith("@3tla.local")) {
+        errorEl.textContent = "Email odbiorcy musi kończyć się na @3tla.local";
+        return;
+      }
+      if (text.length < 1) {
+        errorEl.textContent = "Wpisz treść zadania";
+        return;
+      }
+      if (text.length > 5000) {
+        errorEl.textContent = "Zadanie może mieć maksymalnie 5000 znaków";
+        return;
+      }
+
+      try {
+        const ref = doc(db, "tasks", target);
+        const snap = await getDoc(ref);
+        let tasks = snap.exists() ? snap.data().tasks || [] : [];
+        tasks.push(text);
+
+        await setDoc(ref, { tasks }, { merge: true });
+        $("task-message").value = "";
+        errorEl.textContent = "";
+        alert("Zadanie wysłane ✓");
+      } catch (err) {
+        errorEl.textContent = "Błąd wysyłania: " + err.message;
+        console.error(err);
+      }
+    };
+
+    // ──── Ładowanie zadań ────────────────────────────
+    async function loadTasks(email) {
+      const container = $("task-list");
+      container.innerHTML = "<h2>Twoje zadania</h2>";
+
+      try {
+        const ref = doc(db, "tasks", email);
+        const snap = await getDoc(ref);
+        if (!snap.exists() || !snap.data().tasks?.length) {
+          container.innerHTML += "<p>Brak zadań na chwilę obecną.</p>";
+          return;
+        }
+
+        const tasks = snap.data().tasks;
+        for (const task of tasks) {
+          const div = document.createElement("div");
+          div.className = "task";
+          // proste **bold** → <b>
+          const html = task.replace(/\*\*(.+?)\*\*/g, "<span class='bold'>$1</span>");
+          div.innerHTML = html;
+          container.appendChild(div);
+        }
+      } catch (err) {
+        console.error("Błąd odczytu zadań:", err);
+        container.innerHTML += "<p style='color:#c00'>Nie udało się wczytać zadań</p>";
+      }
+    }
+
+    // ──── Nasłuch stanu logowania ────────────────────
+    onAuthStateChanged(auth, user => {
+      if (user) {
+        hide($("login-section"));
+        show($("user-section"));
+        $("user-email").textContent = user.email;
+
+        loadTasks(user.email);
+
+        if (user.email === ADMIN_EMAIL) {
+          show($("admin-section"));
+        }
+      } else {
+        show($("login-section"));
+        hide($("user-section"));
+        hide($("admin-section"));
+      }
+    });
+  </script>
 </head>
 <body>
-    <h1>System Zadaniowy</h1>
 
-    <!-- Sekcja logowania -->
-    <div id="login-section">
-        <h2>Logowanie</h2>
-        <input type="email" id="email" placeholder="Email (@3tla.local)" required>
-        <input type="password" id="password" placeholder="Hasło" required>
-        <button onclick="login()">Zaloguj się</button>
-        <p id="login-error" style="color: red;"></p>
-    </div>
+  <h1>System zadań 3tla.local</h1>
 
-    <!-- Sekcja użytkownika po zalogowaniu -->
-    <div id="user-section" class="hidden">
-        <p>Zalogowany jako: <span id="user-email"></span></p>
-        <button onclick="logout()">Wyloguj się</button>
-        <div id="task-list">
-            <h2>Twoje zadania</h2>
-            <!-- Zadania będą tu dynamicznie dodawane -->
-        </div>
-    </div>
+  <div id="login-section">
+    <h2>Logowanie</h2>
+    <input id="email"    type="email"    placeholder="np. mbecela@3tla.local" required autofocus>
+    <input id="password" type="password" placeholder="Hasło" required>
+    <button onclick="login()">Zaloguj się</button>
+    <div id="login-error"></div>
+  </div>
 
-    <!-- Sekcja admina -->
-    <div id="admin-section" class="hidden">
-        <h2>Panel Admina: Wysyłanie zadań</h2>
-        <input type="email" id="target-email" placeholder="Email odbiorcy (@3tla.local)" required>
-        <textarea id="task-message" placeholder="Wpisz zadanie (do 5000 znaków). Użyj **tekst** do pogrubienia." maxlength="5000"></textarea>
-        <button onclick="sendTask()">Wyślij zadanie</button>
-        <p id="send-error" style="color: red;"></p>
-    </div>
+  <div id="user-section" class="hidden">
+    <p>Zalogowany jako: <strong id="user-email"></strong></p>
+    <button onclick="logout()">Wyloguj się</button>
 
-    <script>
-        // Konfiguracja Firebase - ZASTĄP TYM SWOJĄ KONFIGURACJĄ Z KONSOI FIREBASE!
-        const firebaseConfig = {
-            apiKey: "AIzaSyACzVKOmFK87VJJvBGCW921yrxbpKgYEKU",
-            authDomain: "iiitla-zadania.firebaseapp.com",
-            projectId: "iiitla-zadania",
-            storageBucket: "iiitla-zadania.firebasestorage.app",
-            messagingSenderId: "753248383455",
-            appId: "1:753248383455:web:f39ab717514c979913146a",
-            measurementId: "G-9DQCJ8T5QQ"
-        };
+    <div id="task-list"></div>
+  </div>
 
-        // Inicjalizacja Firebase
-        const app = firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
+  <div id="admin-section" class="hidden">
+    <h2>Panel wysyłania zadań (admin)</h2>
+    <input id="target-email" type="email" placeholder="Do kogo? (email@3tla.local)" required>
+    <textarea id="task-message" placeholder="Treść zadania...&#10;&#10;**pogrubiony tekst** = pogrubienie" maxlength="5000" rows="8"></textarea>
+    <button onclick="sendTask()">Wyślij zadanie</button>
+    <div id="send-error"></div>
+  </div>
 
-        const ADMIN_EMAIL = 'mbecela@3tla.local';
-
-        // Funkcja logowania
-        function login() {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            const error = document.getElementById('login-error');
-
-            if (!email.endsWith('@3tla.local')) {
-                error.textContent = 'Email musi kończyć się na @3tla.local';
-                return;
-            }
-
-            auth.signInWithEmailAndPassword(email, password)
-                .then(userCredential => {
-                    document.getElementById('login-section').classList.add('hidden');
-                    document.getElementById('user-section').classList.remove('hidden');
-                    document.getElementById('user-email').textContent = email;
-                    loadTasks(email);
-
-                    if (email === ADMIN_EMAIL) {
-                        document.getElementById('admin-section').classList.remove('hidden');
-                    }
-                })
-                .catch(err => {
-                    error.textContent = 'Błąd logowania: ' + err.message;
-                });
-        }
-
-        // Funkcja wylogowania
-        function logout() {
-            auth.signOut().then(() => {
-                document.getElementById('login-section').classList.remove('hidden');
-                document.getElementById('user-section').classList.add('hidden');
-                document.getElementById('admin-section').classList.add('hidden');
-                document.getElementById('task-list').innerHTML = '<h2>Twoje zadania</h2>';
-            });
-        }
-
-        // Ładowanie zadań dla użytkownika
-        function loadTasks(email) {
-            const taskList = document.getElementById('task-list');
-            taskList.innerHTML = '<h2>Twoje zadania</h2>'; // Reset
-
-            db.collection('tasks').doc(email).get()
-                .then(doc => {
-                    if (doc.exists) {
-                        const tasks = doc.data().tasks || [];
-                        tasks.forEach(task => {
-                            const taskDiv = document.createElement('div');
-                            taskDiv.classList.add('task');
-                            // Proste renderowanie Markdown dla bold: **tekst** -> <span class="bold">tekst</span>
-                            const renderedTask = task.replace(/\*\*(.*?)\*\*/g, '<span class="bold">$1</span>');
-                            taskDiv.innerHTML = renderedTask;
-                            taskList.appendChild(taskDiv);
-                        });
-                    } else {
-                        taskList.innerHTML += '<p>Brak zadań.</p>';
-                    }
-                })
-                .catch(err => {
-                    console.error('Błąd ładowania zadań:', err);
-                });
-        }
-
-        // Wysyłanie zadania przez admina
-        function sendTask() {
-            const targetEmail = document.getElementById('target-email').value;
-            const message = document.getElementById('task-message').value;
-            const error = document.getElementById('send-error');
-
-            if (!targetEmail.endsWith('@3tla.local')) {
-                error.textContent = 'Email odbiorcy musi kończyć się na @3tla.local';
-                return;
-            }
-
-            if (message.length > 5000) {
-                error.textContent = 'Wiadomość przekracza 5000 znaków';
-                return;
-            }
-
-            // Pobierz istniejące zadania lub utwórz nowe
-            const userTasksRef = db.collection('tasks').doc(targetEmail);
-            userTasksRef.get()
-                .then(doc => {
-                    let tasks = [];
-                    if (doc.exists) {
-                        tasks = doc.data().tasks || [];
-                    }
-                    tasks.push(message); // Dodaj nowe zadanie
-
-                    userTasksRef.set({ tasks: tasks })
-                        .then(() => {
-                            error.textContent = '';
-                            alert('Zadanie wysłane!');
-                            document.getElementById('task-message').value = '';
-                        })
-                        .catch(err => {
-                            error.textContent = 'Błąd wysyłania: ' + err.message;
-                        });
-                });
-        }
-
-        // Obserwuj stan autentykacji
-        auth.onAuthStateChanged(user => {
-            if (user) {
-                document.getElementById('login-section').classList.add('hidden');
-                document.getElementById('user-section').classList.remove('hidden');
-                document.getElementById('user-email').textContent = user.email;
-                loadTasks(user.email);
-
-                if (user.email === ADMIN_EMAIL) {
-                    document.getElementById('admin-section').classList.remove('hidden');
-                }
-            } else {
-                document.getElementById('login-section').classList.remove('hidden');
-                document.getElementById('user-section').classList.add('hidden');
-                document.getElementById('admin-section').classList.add('hidden');
-            }
-        });
-    </script>
 </body>
 </html>
