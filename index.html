@@ -157,6 +157,22 @@
         hide($("admin-section"));
       }
     });
+
+    // ──── Podpinanie przycisków (ostatnia rzecz w module) ────
+    document.addEventListener('DOMContentLoaded', () => {
+        // logowanie
+        const loginBtn = document.querySelector('#login-section button');
+        if (loginBtn) loginBtn.addEventListener('click', login);
+
+        // wylogowanie
+        const logoutBtn = document.querySelector('#user-section button');
+        if (logoutBtn) logoutBtn.addEventListener('click', logout);
+
+        // wysyłanie zadania
+        const sendBtn = document.querySelector('#admin-section button');
+        if (sendBtn) sendBtn.addEventListener('click', sendTask);
+    });
+    
   </script>
 </head>
 <body>
@@ -167,13 +183,13 @@
     <h2>Logowanie</h2>
     <input id="email"    type="email"    placeholder="np. mbecela@3tla.local" required autofocus>
     <input id="password" type="password" placeholder="Hasło" required>
-    <button onclick="login()">Zaloguj się</button>
+    <button>Zaloguj się</button>
     <div id="login-error"></div>
   </div>
 
   <div id="user-section" class="hidden">
     <p>Zalogowany jako: <strong id="user-email"></strong></p>
-    <button onclick="logout()">Wyloguj się</button>
+    <button>Wyloguj się</button>
 
     <div id="task-list"></div>
   </div>
@@ -182,9 +198,10 @@
     <h2>Panel wysyłania zadań (admin)</h2>
     <input id="target-email" type="email" placeholder="Do kogo? (email@3tla.local)" required>
     <textarea id="task-message" placeholder="Treść zadania...&#10;&#10;**pogrubiony tekst** = pogrubienie" maxlength="5000" rows="8"></textarea>
-    <button onclick="sendTask()">Wyślij zadanie</button>
+    <button">Wyślij zadanie</button>
     <div id="send-error"></div>
   </div>
 
 </body>
 </html>
+
