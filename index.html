@@ -26,6 +26,7 @@
 
   <!-- jsPDF dla generowania PDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 
   <!-- Firebase v10 modular (najnowsze podejście) -->
   <script type="module">
@@ -237,18 +238,50 @@
     };
 
     // ──── Generowanie PDF ────────────────────────────
-    function generatePDF(target, date, task) {
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF();
+      function generatePDF(target, date, task) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+      
+        doc.setFontSize(16);
+        doc.text("Ocena zadania", 105, 20, { align: "center" });
 
-      doc.setFontSize(16);
-      doc.text("Ocena zadania", 105, 20, { align: "center" });
+        doc.setFontSize(12);
+        doc.text(`Dla: ${target}`, 20, 40);
+        doc.text(`Data wysłania: ${date}`, 20, 50);
+        doc.text("Zadanie:", 20, 60);
+        const splitTask = doc.splitTextToSize(task, 170);
+        doc.text(splitTask, 20, 70);
 
-      doc.setFontSize(12);
-      doc.text(`Dla: ${target}`, 20, 40);
-      doc.text(`Data wysłania: ${date}`, 20, 50);
-      doc.text("Zadanie:", 20, 60);
-      doc.text(task, 20, 70, { maxWidth: 170 });
+        // Pobierz oceny
+        const assessments = [];
+        for (let i = 1; i <= 6; i++) {
+          const sel = $(`assess-${i}`);
+          let val = sel?.value;
+          if (val === "good") assessments.push("Poprawnie");
+          else if (val === "bad")  assessments.push("Źle");
+          else                     assessments.push("—");
+        }
+
+        // Tabela – wywołujemy autoTable jako funkcję
+        autoTable(doc, {
+          startY: 90,
+          head: [['Polecenie 1', 'Polecenie 2', 'Polecenie 3', 'Polecenie 4', 'Polecenie 5', 'Polecenie 6']],
+          body: [assessments],
+          theme: 'grid',
+          styles: { fontSize: 10, cellPadding: 4, halign: 'center' },
+          headStyles: { fillColor: [66, 139, 202] },
+          columnStyles: {
+            0: { cellWidth: 30 },
+            1: { cellWidth: 30 },
+            2: { cellWidth: 30 },
+            3: { cellWidth: 30 },
+            4: { cellWidth: 30 },
+            5: { cellWidth: 30 }
+          }
+        });
+
+        doc.save(`ocena_${target.replace('@', '_')}_${date.replace(/[: /]/g, '-')}.pdf`);
+      }
 
       // Pobierz oceny
       const assessments = [];
@@ -258,7 +291,7 @@
       }
 
       // Dodaj tabelę do PDF
-      doc.autoTable({
+      autoTable(doc, {
         startY: 90,
         head: [['Polecenie 1', 'Polecenie 2', 'Polecenie 3', 'Polecenie 4', 'Polecenie 5', 'Polecenie 6']],
         body: [assessments],
@@ -348,3 +381,4 @@
 
 </body>
 </html>
+
