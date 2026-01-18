@@ -13,13 +13,25 @@
     .task { border: 1px solid #ddd; padding: 1rem; margin: 1rem 0; border-radius: 6px; background: #fafafa; }
     .bold { font-weight: 700; }
     #error { color: #c00; margin: 0.5rem 0; min-height: 1.2rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+    th, td { border: 1px solid #ddd; padding: 0.5rem; text-align: center; }
+    select.good { color: green; }
+    select.bad { color: red; }
+    #assessment-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; }
+    #assessment-content { background: white; padding: 2rem; border-radius: 8px; max-width: 800px; width: 90%; }
+    #sent-tasks-list { margin-top: 2rem; }
+    .sent-task { border: 1px solid #ccc; padding: 1rem; margin: 1rem 0; }
+    .sent-task button { margin-top: 0.5rem; }
   </style>
+
+  <!-- jsPDF dla generowania PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <!-- Firebase v10 modular (najnowsze podejście) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc, setDoc, collection } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, setDoc, Timestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
     // ────────────────────────────────────────────────
     //  TU WPISZ SWOJĄ KONFIGURACJĘ (z konsoli Firebase)
@@ -46,7 +58,7 @@
     const hide = el => el.classList.add("hidden");
 
     // ──── Logowanie ──────────────────────────────────
-    window.login = async () => {
+    const login = async () => {
       const email = $("email").value.trim();
       const password = $("password").value;
       const errorEl = $("login-error");
@@ -72,12 +84,12 @@
     };
 
     // ──── Wylogowanie ────────────────────────────────
-    window.logout = async () => {
+    const logout = async () => {
       await signOut(auth);
     };
 
     // ──── Wysyłanie zadania (admin) ──────────────────
-    window.sendTask = async () => {
+    const sendTask = async () => {
       const target = $("target-email").value.trim();
       const text = $("task-message").value.trim();
       const errorEl = $("send-error");
@@ -96,12 +108,22 @@
       }
 
       try {
-        const ref = doc(db, "tasks", target);
-        const snap = await getDoc(ref);
-        let tasks = snap.exists() ? snap.data().tasks || [] : [];
-        tasks.push(text);
+        const now = Timestamp.now();
 
-        await setDoc(ref, { tasks }, { merge: true });
+        // Zapisz do odbiorcy
+        const targetRef = doc(db, "tasks", target);
+        const targetSnap = await getDoc(targetRef);
+        let targetTasks = targetSnap.exists() ? targetSnap.data().tasks || [] : [];
+        targetTasks.push(text);
+        await setDoc(targetRef, { tasks: targetTasks }, { merge: true });
+
+        // Zapisz do sent_tasks admina
+        const adminRef = doc(db, "tasks", ADMIN_EMAIL);
+        const adminSnap = await getDoc(adminRef);
+        let sentTasks = adminSnap.exists() ? adminSnap.data().sent_tasks || [] : [];
+        sentTasks.push({ target: target, task: text, date: now });
+        await setDoc(adminRef, { sent_tasks: sentTasks }, { merge: true });
+
         $("task-message").value = "";
         errorEl.textContent = "";
         alert("Zadanie wysłane ✓");
@@ -139,6 +161,115 @@
       }
     }
 
+    // ──── Ładowanie wysłanych zadań dla admina ───────
+    async function loadSentTasks() {
+      const container = $("sent-tasks-list");
+      container.innerHTML = "";
+
+      try {
+        const ref = doc(db, "tasks", ADMIN_EMAIL);
+        const snap = await getDoc(ref);
+        if (!snap.exists() || !snap.data().sent_tasks?.length) {
+          container.innerHTML = "<p>Brak wysłanych zadań.</p>";
+          return;
+        }
+
+        const sentTasks = snap.data().sent_tasks;
+        sentTasks.forEach((item, index) => {
+          const div = document.createElement("div");
+          div.className = "sent-task";
+          const dateStr = item.date.toDate().toLocaleString('pl-PL');
+          div.innerHTML = `
+            <p><strong>Do:</strong> ${item.target}</p>
+            <p><strong>Data:</strong> ${dateStr}</p>
+            <p><strong>Zadanie:</strong> ${item.task.replace(/\*\*(.+?)\*\*/g, "<span class='bold'>$1</span>")}</p>
+          `;
+          const assessBtn = document.createElement("button");
+          assessBtn.textContent = "Oceń";
+          assessBtn.onclick = () => openAssessment(index, item.task, item.target, dateStr);
+          div.appendChild(assessBtn);
+          container.appendChild(div);
+        });
+      } catch (err) {
+        console.error("Błąd odczytu wysłanych zadań:", err);
+        container.innerHTML = "<p style='color:#c00'>Nie udało się wczytać wysłanych zadań</p>";
+      }
+    }
+
+    // ──── Otwieranie modalu oceny ────────────────────
+    function openAssessment(index, task, target, date) {
+      const modal = $("assessment-modal");
+      const content = $("assessment-content");
+      content.innerHTML = `
+        <h3>Ocena zadania dla ${target} z ${date}</h3>
+        <p>Zadanie: ${task.replace(/\*\*(.+?)\*\*/g, "<span class='bold'>$1</span>")}</p>
+        <table id="assessment-table">
+          <tr>
+            <th>Polecenie 1</th>
+            <th>Polecenie 2</th>
+            <th>Polecenie 3</th>
+            <th>Polecenie 4</th>
+            <th>Polecenie 5</th>
+            <th>Polecenie 6</th>
+          </tr>
+          <tr>
+            <td><select id="assess-1"><option value="">Wybierz</option><option value="good" style="color:green">Polecenie wykonane poprawnie</option><option value="bad" style="color:red">Polecenie wykonane źle</option></select></td>
+            <td><select id="assess-2"><option value="">Wybierz</option><option value="good" style="color:green">Polecenie wykonane poprawnie</option><option value="bad" style="color:red">Polecenie wykonane źle</option></select></td>
+            <td><select id="assess-3"><option value="">Wybierz</option><option value="good" style="color:green">Polecenie wykonane poprawnie</option><option value="bad" style="color:red">Polecenie wykonane źle</option></select></td>
+            <td><select id="assess-4"><option value="">Wybierz</option><option value="good" style="color:green">Polecenie wykonane poprawnie</option><option value="bad" style="color:red">Polecenie wykonane źle</option></select></td>
+            <td><select id="assess-5"><option value="">Wybierz</option><option value="good" style="color:green">Polecenie wykonane poprawnie</option><option value="bad" style="color:red">Polecenie wykonane źle</option></select></td>
+            <td><select id="assess-6"><option value="">Wybierz</option><option value="good" style="color:green">Polecenie wykonane poprawnie</option><option value="bad" style="color:red">Polecenie wykonane źle</option></select></td>
+          </tr>
+        </table>
+        <button id="download-pdf">Pobierz PDF</button>
+        <button onclick="closeAssessment()">Zamknij</button>
+      `;
+
+      // Podpinanie przycisku pobierania PDF
+      $("download-pdf").onclick = () => generatePDF(target, date, task);
+
+      modal.style.display = "flex";
+    }
+
+    // ──── Zamykanie modalu ───────────────────────────
+    window.closeAssessment = () => {
+      $("assessment-modal").style.display = "none";
+    };
+
+    // ──── Generowanie PDF ────────────────────────────
+    function generatePDF(target, date, task) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      doc.setFontSize(16);
+      doc.text("Ocena zadania", 105, 20, { align: "center" });
+
+      doc.setFontSize(12);
+      doc.text(`Dla: ${target}`, 20, 40);
+      doc.text(`Data wysłania: ${date}`, 20, 50);
+      doc.text("Zadanie:", 20, 60);
+      doc.text(task, 20, 70, { maxWidth: 170 });
+
+      // Pobierz oceny
+      const assessments = [];
+      for (let i = 1; i <= 6; i++) {
+        const sel = $(`assess-${i}`);
+        assessments.push(sel.value ? (sel.value === "good" ? "Poprawnie (zielono)" : "Źle (czerwono)") : "Nie oceniono");
+      }
+
+      // Dodaj tabelę do PDF
+      doc.autoTable({
+        startY: 90,
+        head: [['Polecenie 1', 'Polecenie 2', 'Polecenie 3', 'Polecenie 4', 'Polecenie 5', 'Polecenie 6']],
+        body: [assessments],
+        theme: 'grid',
+        styles: { fontSize: 10 },
+        columnStyles: { 0: { cellWidth: 30 }, 1: { cellWidth: 30 }, 2: { cellWidth: 30 }, 3: { cellWidth: 30 }, 4: { cellWidth: 30 }, 5: { cellWidth: 30 } }
+      });
+
+      doc.save(`ocena_${target.replace('@', '_')}_${date.replace(/ /g, '_')}.pdf`);
+    }
+
     // ──── Nasłuch stanu logowania ────────────────────
     onAuthStateChanged(auth, user => {
       if (user) {
@@ -150,11 +281,14 @@
 
         if (user.email === ADMIN_EMAIL) {
           show($("admin-section"));
+          show($("assess-section"));
+          loadSentTasks();
         }
       } else {
         show($("login-section"));
         hide($("user-section"));
         hide($("admin-section"));
+        hide($("assess-section"));
       }
     });
 
@@ -172,7 +306,6 @@
         const sendBtn = document.querySelector('#admin-section button');
         if (sendBtn) sendBtn.addEventListener('click', sendTask);
     });
-    
   </script>
 </head>
 <body>
@@ -202,7 +335,16 @@
     <div id="send-error"></div>
   </div>
 
+  <!-- Nowa sekcja "Oceń" dla admina -->
+  <div id="assess-section" class="hidden">
+    <h2>Oceń wysłane zadania</h2>
+    <div id="sent-tasks-list"></div>
+  </div>
+
+  <!-- Modal do oceny -->
+  <div id="assessment-modal">
+    <div id="assessment-content"></div>
+  </div>
+
 </body>
 </html>
-
-
