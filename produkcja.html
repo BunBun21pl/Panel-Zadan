@@ -1,1 +1,306 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Produkcja – 3tla.local</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 1100px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      background: #f9f9f9;
+    }
+    .hidden { display: none; }
+    input, textarea, select, button {
+      width: 100%;
+      margin: 0.7rem 0;
+      padding: 0.75rem;
+      box-sizing: border-box;
+      font-size: 1rem;
+    }
+    button {
+      background: #0066cc;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      padding: 0.8rem 1.5rem;
+    }
+    button:hover { background: #0055aa; }
+    button.logout { background: #c00; }
+    .status {
+      padding: 0.4rem 1rem;
+      border-radius: 6px;
+      font-weight: 600;
+      display: inline-block;
+      min-width: 120px;
+      text-align: center;
+    }
+    .status-nieodebrane { background: #ffebee; color: #c62828; }
+    .status-w-toku     { background: #fff3e0; color: #f57c00; }
+    .status-zakonczone { background: #e8f5e9; color: #2e7d32; }
+    .zlecenie {
+      border: 1px solid #ddd;
+      padding: 1.2rem;
+      margin: 1.2rem 0;
+      border-radius: 8px;
+      background: white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .materials-list {
+      margin: 1rem 0;
+      padding-left: 1.5rem;
+    }
+    nav {
+      margin: 1.5rem 0;
+      padding: 1rem;
+      background: #f0f0f0;
+      border-radius: 8px;
+    }
+    nav a {
+      margin-right: 1.5rem;
+      color: #0066cc;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    nav a:hover { text-decoration: underline; }
+  </style>
 
+  <!-- Firebase -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, Timestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyACzVKOmFK87VJJvBGCW921yrxbpKgYEKU",
+      authDomain: "iiitla-zadania.firebaseapp.com",
+      projectId: "iiitla-zadania",
+      storageBucket: "iiitla-zadania.firebasestorage.app",
+      messagingSenderId: "753248383455",
+      appId: "1:753248383455:web:f39ab717514c979913146a",
+      measurementId: "G-9DQCJ8T5QQ"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const ADMIN_EMAIL = "mbecela@3tla.local";
+
+    let currentUserEmail = "";
+
+    // ──── Helpers ────────────────────────────────────────
+    const $ = id => document.getElementById(id);
+    const show = el => el?.classList.remove("hidden");
+    const hide = el => el?.classList.add("hidden");
+
+    // ──── Tworzenie nowego zlecenia ──────────────────────
+    async function createZlecenie() {
+      const numer = $("numer-zlecenia").value.trim();
+      const dzial = $("dzial-produkcji").value.trim();
+      const produkt = $("produkt").value.trim();
+      const materialyRaw = $("materialy").value.trim();
+
+      if (!numer || !dzial || !produkt || !materialyRaw) {
+        alert("Wypełnij wszystkie pola!");
+        return;
+      }
+
+      const materialy = materialyRaw
+        .split("\n")
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+
+      try {
+        await addDoc(collection(db, "zlecenia_produkcyjne"), {
+          numer,
+          dzial,
+          produkt,
+          materialy,
+          status: "Nieodebrane",
+          createdBy: currentUserEmail,
+          createdAt: Timestamp.now()
+        });
+
+        alert("Zlecenie utworzone");
+        $("numer-zlecenia").value = "";
+        $("dzial-produkcji").value = "";
+        $("produkt").value = "";
+        $("materialy").value = "";
+        hide($("form-zlecenie"));
+        loadZlecenia();
+      } catch (err) {
+        alert("Błąd: " + err.message);
+        console.error(err);
+      }
+    }
+
+    // ──── Zmiana statusu ─────────────────────────────────
+    async function changeStatus(docId, newStatus) {
+      if (newStatus === "Zakończone" && currentUserEmail !== ADMIN_EMAIL) {
+        alert("Tylko administrator może oznaczyć zlecenie jako Zakończone.");
+        return;
+      }
+
+      try {
+        await updateDoc(doc(db, "zlecenia_produkcyjne", docId), {
+          status: newStatus,
+          lastModifiedBy: currentUserEmail,
+          lastModifiedAt: Timestamp.now()
+        });
+        loadZlecenia();
+      } catch (err) {
+        alert("Błąd zmiany statusu: " + err.message);
+      }
+    }
+
+    // ──── Ładowanie listy zleceń ─────────────────────────
+    async function loadZlecenia() {
+      const container = $("zlecenia-list");
+      container.innerHTML = "<p>Ładowanie zleceń...</p>";
+
+      try {
+        const q = query(collection(db, "zlecenia_produkcyjne"), orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
+
+        container.innerHTML = "";
+
+        if (snap.empty) {
+          container.innerHTML = "<p>Brak zleceń produkcyjnych.</p>";
+          return;
+        }
+
+        snap.forEach(docSnap => {
+          const d = docSnap.data();
+          const id = docSnap.id;
+          const createdDate = d.createdAt.toDate().toLocaleString("pl-PL");
+
+          let statusClass = "";
+          if (d.status === "Nieodebrane") statusClass = "status-nieodebrane";
+          else if (d.status === "W toku")     statusClass = "status-w-toku";
+          else if (d.status === "Zakończone") statusClass = "status-zakonczone";
+
+          const div = document.createElement("div");
+          div.className = "zlecenie";
+          div.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <h3>Zlecenie nr ${d.numer}</h3>
+              <span class="status ${statusClass}">${d.status}</span>
+            </div>
+            <p><strong>Dział:</strong> ${d.dzial}</p>
+            <p><strong>Produkt:</strong> ${d.produkt}</p>
+            <p><strong>Potrzebne materiały:</strong></p>
+            <ul class="materials-list">
+              ${d.materialy.map(m => `<li>${m}</li>`).join("")}
+            </ul>
+            <p><small>Utworzone przez: ${d.createdBy} • ${createdDate}</small></p>
+          `;
+
+          // Przyciski zmiany statusu
+          const btnsDiv = document.createElement("div");
+          btnsDiv.style.marginTop = "1rem";
+
+          if (d.status === "Nieodebrane" && d.createdBy === currentUserEmail) {
+            const btnWToku = document.createElement("button");
+            btnWToku.textContent = "Rozpocznij → W toku";
+            btnWToku.onclick = () => changeStatus(id, "W toku");
+            btnsDiv.appendChild(btnWToku);
+          }
+
+          if (d.status === "W toku" && d.createdBy === currentUserEmail) {
+            const btnNieodebrane = document.createElement("button");
+            btnNieodebrane.textContent = "Wróć do Nieodebrane";
+            btnNieodebrane.style.marginRight = "0.8rem";
+            btnNieodebrane.style.background = "#757575";
+            btnNieodebrane.onclick = () => changeStatus(id, "Nieodebrane");
+            btnsDiv.appendChild(btnNieodebrane);
+          }
+
+          if (d.status !== "Zakończone" && currentUserEmail === ADMIN_EMAIL) {
+            const btnZakonczone = document.createElement("button");
+            btnZakonczone.textContent = "Zakończ zlecenie";
+            btnZakonczone.style.background = "#2e7d32";
+            btnZakonczone.onclick = () => changeStatus(id, "Zakończone");
+            btnsDiv.appendChild(btnZakonczone);
+          }
+
+          div.appendChild(btnsDiv);
+          container.appendChild(div);
+        });
+      } catch (err) {
+        container.innerHTML = `<p style="color:#c00">Błąd wczytywania zleceń: ${err.message}</p>`;
+      }
+    }
+
+    // ──── Logika po zalogowaniu ──────────────────────────
+    onAuthStateChanged(auth, user => {
+      if (!user) {
+        window.location.href = "index.html";
+        return;
+      }
+
+      currentUserEmail = user.email;
+      hide($("loading"));
+      show($("content"));
+      $("current-user").textContent = user.email;
+      loadZlecenia();
+    });
+
+    document.addEventListener("DOMContentLoaded", () => {
+      $("btn-logout")?.addEventListener("click", () => signOut(auth));
+      $("btn-utworz-zlecenie")?.addEventListener("click", () => show($("form-zlecenie")));
+      $("btn-anuluj")?.addEventListener("click", () => hide($("form-zlecenie")));
+      $("btn-zapisz-zlecenie")?.addEventListener("click", createZlecenie);
+    });
+  </script>
+</head>
+<body>
+
+  <div id="loading">
+    <h2>Ładowanie...</h2>
+  </div>
+
+  <div id="content" class="hidden">
+    <nav>
+      <a href="index.html">← Strona główna / Zadania</a>
+      <a href="oceny.html">Oceny (admin)</a>
+      <a href="dokumenty.html">Dokumenty</a>
+      <a href="magazyn.html">Magazyn</a>
+    </nav>
+
+    <h1>Produkcja – Zlecenia produkcyjne</h1>
+    <p>Zalogowany jako: <strong id="current-user"></strong></p>
+    <button id="btn-logout" style="background:#c00;">Wyloguj się</button>
+
+    <div style="margin: 2rem 0;">
+      <button id="btn-utworz-zlecenie">Utwórz zlecenie produkcyjne</button>
+    </div>
+
+    <!-- Formularz tworzenia zlecenia -->
+    <div id="form-zlecenie" class="hidden" style="background:white; padding:1.5rem; border-radius:8px; border:1px solid #ddd;">
+      <h2>Nowe zlecenie produkcyjne</h2>
+
+      <input id="numer-zlecenia" placeholder="Numer zlecenia (wpisz własnoręcznie)" required>
+      <input id="dzial-produkcji" placeholder="Dział produkcji" required>
+      <input id="produkt" placeholder="Co będzie produkowane" required>
+
+      <label for="materialy" style="margin-top:1.2rem; display:block; font-weight:600;">
+        Potrzebne materiały i ilości (każda pozycja w nowej linii, np. Blacha 2mm – 15 szt)
+      </label>
+      <textarea id="materialy" rows="6" placeholder="Blacha stalowa 2mm – 15 szt&#10;Śruby M8x30 – 120 szt&#10;Farba RAL 9010 – 4 l"></textarea>
+
+      <div style="margin-top:1.5rem;">
+        <button id="btn-zapisz-zlecenie">Zapisz zlecenie</button>
+        <button id="btn-anuluj" style="background:#757575; margin-left:1rem;">Anuluj</button>
+      </div>
+    </div>
+
+    <h2>Aktywne zlecenia produkcyjne</h2>
+    <div id="zlecenia-list"></div>
+  </div>
+
+</body>
+</html>
