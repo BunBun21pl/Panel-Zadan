@@ -154,7 +154,7 @@
 
         loadTasks(user.email);
 
-        if (user.email === ADMIN_EMAIL) {
+        if (ADMINS.includes(user.email)) {
           show($("admin-section"));
           show($("admin-nav"));
         } else {
@@ -230,5 +230,6 @@
 
 </body>
 </html>
+
 
 
