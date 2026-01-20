@@ -80,7 +80,10 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    const ADMIN_EMAIL = "mbecela@3tla.local";
+    const ADMINS = [
+      "mbecela@3tla.local",
+      "nnoczynska@3tla.local"
+    ];
 
     // ──── Helpers ────────────────────────────────────────
     const $ = id => document.getElementById(id);
@@ -164,7 +167,7 @@
 
       hide($("loading"));
       
-      if (user.email === ADMIN_EMAIL) {
+      if (ADMINS.includes(user.email)) {
         show($("admin-content"));
         $("current-user").textContent = user.email;
         loadEvaluations();
