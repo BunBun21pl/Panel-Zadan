@@ -1,1 +1,226 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Oceny – 3tla.local</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      background: #f9f9f9;
+    }
+    .hidden { display: none; }
+    input, textarea, select, button {
+      display: block;
+      width: 100%;
+      margin: 0.8rem 0;
+      padding: 0.7rem;
+      box-sizing: border-box;
+      font-size: 1rem;
+    }
+    button {
+      background: #0066cc;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button:hover { background: #0055aa; }
+    button.logout {
+      background: #c00;
+    }
+    .evaluation {
+      border: 1px solid #ddd;
+      padding: 1rem;
+      margin: 1rem 0;
+      border-radius: 6px;
+      background: white;
+    }
+    .error { color: #c00; min-height: 1.2rem; }
+    nav {
+      margin: 1.5rem 0;
+      padding: 0.8rem;
+      background: #f0f0f0;
+      border-radius: 8px;
+    }
+    nav a {
+      margin-right: 1.5rem;
+      color: #0066cc;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    nav a:hover { text-decoration: underline; }
+    .no-access {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #555;
+    }
+  </style>
 
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, getDocs, Timestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyACzVKOmFK87VJJvBGCW921yrxbpKgYEKU",
+      authDomain: "iiitla-zadania.firebaseapp.com",
+      projectId: "iiitla-zadania",
+      storageBucket: "iiitla-zadania.firebasestorage.app",
+      messagingSenderId: "753248383455",
+      appId: "1:753248383455:web:f39ab717514c979913146a",
+      measurementId: "G-9DQCJ8T5QQ"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const ADMIN_EMAIL = "mbecela@3tla.local";
+
+    // ──── Helpers ────────────────────────────────────────
+    const $ = id => document.getElementById(id);
+    const show = el => el?.classList.remove("hidden");
+    const hide = el => el?.classList.add("hidden");
+
+    // ──── Dodawanie oceny ────────────────────────────────
+    async function addEvaluation() {
+      const userEmail = $("eval-user").value.trim();
+      const description = $("eval-desc").value.trim();
+      const errorEl = $("add-error");
+
+      if (!userEmail) {
+        errorEl.textContent = "Wybierz użytkownika";
+        return;
+      }
+      if (!description) {
+        errorEl.textContent = "Wpisz treść oceny";
+        return;
+      }
+
+      try {
+        await addDoc(collection(db, "evaluations"), {
+          userEmail,
+          description,
+          createdAt: Timestamp.now(),
+          createdBy: auth.currentUser.email
+        });
+
+        $("eval-desc").value = "";
+        errorEl.textContent = "";
+        alert("Ocena dodana");
+        loadEvaluations();
+      } catch (err) {
+        errorEl.textContent = "Błąd: " + err.message;
+        console.error(err);
+      }
+    }
+
+    // ──── Ładowanie listy ocen ───────────────────────────
+    async function loadEvaluations() {
+      const container = $("evaluations-list");
+      container.innerHTML = "<p>Ładowanie ocen...</p>";
+
+      try {
+        const q = query(collection(db, "evaluations"), orderBy("createdAt", "desc"));
+        const querySnapshot = await getDocs(q);
+
+        container.innerHTML = "";
+
+        if (querySnapshot.empty) {
+          container.innerHTML = "<p>Nie ma jeszcze żadnych ocen.</p>";
+          return;
+        }
+
+        querySnapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          const date = data.createdAt.toDate().toLocaleString("pl-PL");
+          const div = document.createElement("div");
+          div.className = "evaluation";
+          div.innerHTML = `
+            <strong>${data.userEmail}</strong>
+            <small style="color:#666; float:right;">${date}</small>
+            <p style="margin:0.8rem 0; white-space: pre-wrap;">${data.description}</p>
+            <small style="color:#888;">Dodano przez: ${data.createdBy}</small>
+          `;
+          container.appendChild(div);
+        });
+      } catch (err) {
+        container.innerHTML = `<p class="error">Nie udało się wczytać ocen: ${err.message}</p>`;
+      }
+    }
+
+    // ──── Sprawdzanie uprawnień i ładowanie po zalogowaniu ──
+    onAuthStateChanged(auth, user => {
+      if (!user) {
+        // Niezalogowany → przekierowanie na index.html
+        window.location.href = "index.html";
+        return;
+      }
+
+      hide($("loading"));
+      
+      if (user.email === ADMIN_EMAIL) {
+        show($("admin-content"));
+        $("current-user").textContent = user.email;
+        loadEvaluations();
+      } else {
+        show($("no-permission"));
+      }
+    });
+
+    // ──── Eventy ─────────────────────────────────────────
+    document.addEventListener("DOMContentLoaded", () => {
+      $("btn-add-eval")?.addEventListener("click", addEvaluation);
+      $("btn-logout")?.addEventListener("click", () => signOut(auth));
+    });
+  </script>
+</head>
+<body>
+
+  <div id="loading">
+    <h2>Trwa sprawdzanie uprawnień...</h2>
+  </div>
+
+  <div id="no-permission" class="hidden no-access">
+    <h2>Brak dostępu</h2>
+    <p>Ta strona jest dostępna wyłącznie dla administratora.</p>
+    <p><a href="index.html">← Powrót do strony głównej</a></p>
+  </div>
+
+  <div id="admin-content" class="hidden">
+    <nav>
+      <a href="index.html">← Strona główna / Zadania</a>
+      <a href="dokumenty.html">Dokumenty</a>
+      <a href="magazyn.html">Magazyn</a>
+      <a href="produkcja.html">Produkcja</a>
+    </nav>
+
+    <h1>Panel ocen</h1>
+    <p>Zalogowany jako: <strong id="current-user"></strong></p>
+    <button id="btn-logout" class="logout">Wyloguj się</button>
+
+    <h2>Dodaj nową ocenę</h2>
+    <select id="eval-user" required>
+      <option value="">— wybierz użytkownika —</option>
+      <option value="jan.kowalski@3tla.local">jan.kowalski@3tla.local</option>
+      <option value="anna.nowak@3tla.local">anna.nowak@3tla.local</option>
+      <option value="piotr.zielinski@3tla.local">piotr.zielinski@3tla.local</option>
+      <!-- dodaj tutaj więcej użytkowników ręcznie -->
+    </select>
+
+    <textarea id="eval-desc" rows="6" placeholder="Opisz co zostało zrobione dobrze, co wymaga poprawy..." required></textarea>
+
+    <button id="btn-add-eval">Dodaj ocenę</button>
+    <div id="add-error" class="error"></div>
+
+    <h2>Dotychczasowe oceny</h2>
+    <div id="evaluations-list"></div>
+  </div>
+
+</body>
+</html>
