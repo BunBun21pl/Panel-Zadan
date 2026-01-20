@@ -88,7 +88,10 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    const ADMIN_EMAIL = "mbecela@3tla.local";
+    const ADMINS = [
+      "mbecela@3tla.local",
+      "nnoczynska@3tla.local"
+    ];
 
     let currentUserEmail = "";
 
@@ -219,7 +222,7 @@
             btnsDiv.appendChild(btnNieodebrane);
           }
 
-          if (d.status !== "Zakończone" && currentUserEmail === ADMIN_EMAIL) {
+          if (d.status !== "Zakończone" && ADMINS.includes(currentUserEmail)) {
             const btnZakonczone = document.createElement("button");
             btnZakonczone.textContent = "Zakończ zlecenie";
             btnZakonczone.style.background = "#2e7d32";
