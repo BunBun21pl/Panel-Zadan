@@ -13,6 +13,9 @@
     .task { border: 1px solid #ddd; padding: 1rem; margin: 1rem 0; border-radius: 6px; background: #fafafa; }
     .bold { font-weight: 700; }
     #error { color: #c00; margin: 0.5rem 0; min-height: 1.2rem; }
+    nav { margin: 1rem 0; padding: 1rem; background: #f0f0f0; border-radius: 8px; }
+    nav a { margin-right: 1rem; color: #0066cc; text-decoration: none; font-weight: bold; }
+    nav a:hover { text-decoration: underline; }
   </style>
 
   <!-- Firebase v10 modular (najnowsze podejście) -->
@@ -150,11 +153,16 @@
 
         if (user.email === ADMIN_EMAIL) {
           show($("admin-section"));
+          show($("admin-nav"));
+        } else {
+          show($("user-nav"));
         }
       } else {
         show($("login-section"));
         hide($("user-section"));
         hide($("admin-section"));
+        hide($("user-nav"));
+        hide($("admin-nav"));
       }
     });
 
@@ -190,6 +198,23 @@
   <div id="user-section" class="hidden">
     <p>Zalogowany jako: <strong id="user-email"></strong></p>
     <button>Wyloguj się</button>
+
+    <!-- Menu nawigacyjne dla zwykłych użytkowników (widoczne po zalogowaniu) -->
+    <nav id="user-nav" class="hidden">
+      <a href="index.html">Strona główna (zadania)</a>
+      <a href="dokumenty.html">Dokumenty</a>
+      <a href="magazyn.html">Magazyn</a>
+      <a href="produkcja.html">Produkcja</a>
+    </nav>
+
+    <!-- Menu nawigacyjne dla admina (widoczne po zalogowaniu jako admin) -->
+    <nav id="admin-nav" class="hidden">
+      <a href="index.html">Strona główna (zadania)</a>
+      <a href="oceny.html">Oceny</a>
+      <a href="dokumenty.html">Dokumenty</a>
+      <a href="magazyn.html">Magazyn</a>
+      <a href="produkcja.html">Produkcja</a>
+    </nav>
 
     <div id="task-list"></div>
   </div>
