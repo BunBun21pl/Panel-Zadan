@@ -1,1 +1,219 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Magazyn – 3tla.local</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      background: #f9f9f9;
+    }
+    .hidden { display: none; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+      background: white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 0.9rem;
+      text-align: left;
+    }
+    th {
+      background: #e8f0fe;
+      font-weight: 600;
+      color: #1a3c6d;
+    }
+    tr:nth-child(even) { background: #f8fbff; }
+    .value { text-align: right; font-weight: 500; }
+    .positive { color: #2e7d32; }
+    .negative { color: #d32f2f; }
+    .zero   { color: #757575; }
+    nav {
+      margin: 1.5rem 0;
+      padding: 1rem;
+      background: #f0f0f0;
+      border-radius: 8px;
+    }
+    nav a {
+      margin-right: 1.5rem;
+      color: #0066cc;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    nav a:hover { text-decoration: underline; }
+    h1, h2 { color: #1a3c6d; }
+    .summary {
+      font-size: 1.15rem;
+      margin: 2rem 0;
+      padding: 1.2rem;
+      background: #e3f2fd;
+      border-radius: 8px;
+      border-left: 5px solid #1976d2;
+    }
+    .no-access {
+      text-align: center;
+      padding: 4rem 1rem;
+      color: #555;
+    }
+    #loading { text-align: center; padding: 4rem; }
+  </style>
 
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import { getFirestore, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyACzVKOmFK87VJJvBGCW921yrxbpKgYEKU",
+      authDomain: "iiitla-zadania.firebaseapp.com",
+      projectId: "iiitla-zadania",
+      storageBucket: "iiitla-zadania.firebasestorage.app",
+      messagingSenderId: "753248383455",
+      appId: "1:753248383455:web:f39ab717514c979913146a",
+      measurementId: "G-9DQCJ8T5QQ"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // ──── Helpers ────────────────────────────────────────
+    const $ = id => document.getElementById(id);
+    const show = el => el?.classList.remove("hidden");
+    const hide = el => el?.classList.add("hidden");
+
+    // ──── Formatowanie liczb ─────────────────────────────
+    const formatNumber = (num, decimals = 2) => {
+      return num.toLocaleString('pl-PL', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+      });
+    };
+
+    // ──── Ładowanie stanu magazynowego ───────────────────
+    async function loadMagazyn() {
+      const tbody = $("magazyn-tbody");
+      const summaryDiv = $("summary");
+      tbody.innerHTML = "<tr><td colspan='6'>Ładowanie stanu magazynowego...</td></tr>";
+
+      try {
+        const q = query(collection(db, "magazyn"), orderBy("nazwa"));
+        const querySnapshot = await getDocs(q);
+
+        tbody.innerHTML = "";
+        let totalIlosc = 0;
+        let totalWartosc = 0;
+
+        if (querySnapshot.empty) {
+          tbody.innerHTML = "<tr><td colspan='6'>Magazyn jest pusty</td></tr>";
+          summaryDiv.innerHTML = "<strong>Łączna wartość magazynu: 0,00 zł</strong>";
+          return;
+        }
+
+        querySnapshot.forEach(docSnap => {
+          const d = docSnap.data();
+          const ilosc = d.ilosc || 0;
+          const wartosc = d.wartosc || 0;
+          const cena = d.cena_srednia || 0;
+
+          totalIlosc += ilosc;
+          totalWartosc += wartosc;
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${d.ktm || '-'}</td>
+            <td>${d.nazwa || 'Brak nazwy'}</td>
+            <td>${d.jednostka || 'szt'}</td>
+            <td class="value ${ilosc > 0 ? 'positive' : ilosc < 0 ? 'negative' : 'zero'}">
+              ${formatNumber(ilosc, ilosc % 1 === 0 ? 0 : 2)}
+            </td>
+            <td class="value">${formatNumber(cena)} zł</td>
+            <td class="value" style="font-weight:600;">${formatNumber(wartosc)} zł</td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        summaryDiv.innerHTML = `
+          <strong>Łączna ilość pozycji: ${totalIlosc.toLocaleString('pl-PL')}</strong><br>
+          <strong style="font-size:1.3rem; color:#1a3c6d;">
+            Łączna wartość magazynu: ${formatNumber(totalWartosc)} zł
+          </strong>
+        `;
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan='6' class="error">Błąd wczytywania magazynu: ${err.message}</td></tr>`;
+        console.error(err);
+      }
+    }
+
+    // ──── Sprawdzanie zalogowania ────────────────────────
+    onAuthStateChanged(auth, user => {
+      if (!user) {
+        window.location.href = "index.html";
+        return;
+      }
+
+      hide($("loading"));
+      show($("content"));
+      $("current-user").textContent = user.email;
+
+      // Ładujemy stan magazynowy
+      loadMagazyn();
+    });
+
+    // ──── Wylogowanie ────────────────────────────────────
+    document.addEventListener("DOMContentLoaded", () => {
+      $("btn-logout")?.addEventListener("click", () => signOut(auth));
+    });
+  </script>
+</head>
+<body>
+
+  <div id="loading">
+    <h2>Ładowanie stanu magazynowego...</h2>
+  </div>
+
+  <div id="content" class="hidden">
+    <nav>
+      <a href="index.html">← Strona główna / Zadania</a>
+      <a href="oceny.html">Oceny (admin)</a>
+      <a href="dokumenty.html">Dokumenty</a>
+      <a href="produkcja.html">Produkcja</a>
+    </nav>
+
+    <h1>Magazyn – aktualny stan</h1>
+    <p>Zalogowany jako: <strong id="current-user"></strong></p>
+    <button id="btn-logout" style="background:#c00; color:white;">Wyloguj się</button>
+
+    <div class="summary" id="summary">
+      Ładowanie podsumowania...
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>KTM</th>
+          <th>Nazwa wyrobu</th>
+          <th>J.m.</th>
+          <th>Stan (ilość)</th>
+          <th>Cena średnia netto</th>
+          <th>Wartość stanu</th>
+        </tr>
+      </thead>
+      <tbody id="magazyn-tbody"></tbody>
+    </table>
+
+    <p style="margin-top:2rem; color:#555; font-size:0.95rem;">
+      Stan magazynowy jest aktualizowany automatycznie na podstawie dokumentów PZ, WZ, MM, RW, PW.
+    </p>
+  </div>
+
+</body>
+</html>
