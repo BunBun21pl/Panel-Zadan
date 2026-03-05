@@ -92,6 +92,8 @@
       console.log("Czy zalogowany?", auth.currentUser ? "tak" : "NIE");
       console.log("Aktualny email:", auth.currentUser?.email || "brak");
       console.log("Czy to admin?", ADMINS.includes(auth.currentUser?.email) ? "TAK" : "NIE");
+      console.log("Wysyłam jako:", auth.currentUser?.email);
+      console.log("Do kogo:", target);
 
       if (!target.endsWith("@3tla.local")) {
         errorEl.textContent = "Email odbiorcy musi kończyć się na @3tla.local";
@@ -237,6 +239,7 @@
 
 </body>
 </html>
+
 
 
 
