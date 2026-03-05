@@ -87,6 +87,11 @@
       const target = $("target-email").value.trim();
       const text = $("task-message").value.trim();
       const errorEl = $("send-error");
+      
+      console.log("=== DEBUG sendTask ===");
+      console.log("Czy zalogowany?", auth.currentUser ? "tak" : "NIE");
+      console.log("Aktualny email:", auth.currentUser?.email || "brak");
+      console.log("Czy to admin?", ADMINS.includes(auth.currentUser?.email) ? "TAK" : "NIE");
 
       if (!target.endsWith("@3tla.local")) {
         errorEl.textContent = "Email odbiorcy musi kończyć się na @3tla.local";
@@ -232,6 +237,7 @@
 
 </body>
 </html>
+
 
 
 
