@@ -5,73 +5,39 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Harmonogram produkcji – 3tla.local</title>
   <style>
-    body {
-      font-family: system-ui, sans-serif;
-      max-width: 1300px;
-      margin: 2rem auto;
-      padding: 0 1rem;
-      background: #f9f9f9;
-    }
+    body { font-family: system-ui, sans-serif; max-width: 1300px; margin: 2rem auto; padding: 0 1rem; background: #f9f9f9; }
     .hidden { display: none; }
-    input, button {
-      padding: 0.7rem;
-      margin: 0.5rem 0;
-      font-size: 1rem;
-    }
-    button {
-      background: #0066cc;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-    }
+    input, button { padding: 0.7rem; margin: 0.5rem 0; font-size: 1rem; }
+    button { background: #0066cc; color: white; border: none; border-radius: 6px; cursor: pointer; }
     button:hover { background: #0055aa; }
     button.red { background: #c00; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 1.5rem 0;
-      background: white;
-    }
-    th, td {
-      border: 1px solid #aaa;
-      padding: 0.8rem;
-      text-align: center;
-    }
+    table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; background: white; }
+    th, td { border: 1px solid #aaa; padding: 0.8rem; text-align: center; }
     th { background: #e3f2fd; }
     .period-header { background: #bbdefb; font-weight: bold; }
-    nav { 
-      margin: 1.5rem 0; 
-      padding: 1rem; 
-      background: #f0f0f0; 
-      border-radius: 8px; 
-    }
-    nav a { 
-      margin-right: 1.5rem; 
-      color: #0066cc; 
-      text-decoration: none; 
-      font-weight: 500; 
+    nav { margin: 1.5rem 0; padding: 1rem; background: #f0f0f0; border-radius: 8px; }
+    nav a { margin-right: 1.5rem; color: #0066cc; text-decoration: none; font-weight: 500; }
+    .harmonogram-item {
+      border: 1px solid #ddd; padding: 1rem; margin: 1rem 0; border-radius: 8px; background: white;
+      display: flex; justify-content: space-between; align-items: center;
     }
   </style>
 
-  <!-- jsPDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 
-  <!-- Firebase -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-    import { getFirestore, collection, addDoc, getDocs, Timestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, Timestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
-    const firebaseConfig = {
+    const firebaseConfig = { /* Twoja konfiguracja */ 
       apiKey: "AIzaSyACzVKOmFK87VJJvBGCW921yrxbpKgYEKU",
       authDomain: "iiitla-zadania.firebaseapp.com",
       projectId: "iiitla-zadania",
       storageBucket: "iiitla-zadania.firebasestorage.app",
       messagingSenderId: "753248383455",
-      appId: "1:753248383455:web:f39ab717514c979913146a",
-      measurementId: "G-9DQCJ8T5QQ"
+      appId: "1:753248383455:web:f39ab717514c979913146a"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -79,14 +45,14 @@
     const db = getFirestore(app);
 
     let currentUserEmail = "";
+    let currentEditingId = null;   // ID edytowanego harmonogramu
 
-    // === Helpers - zdefiniowane na samym początku ===
     const $ = id => document.getElementById(id);
     const show = el => el?.classList.remove("hidden");
     const hide = el => el?.classList.add("hidden");
 
-    // === Tworzenie harmonogramu ===
-    async function createHarmonogram() {
+    // === Tworzenie / Zapisywanie harmonogramu ===
+    async function saveHarmonogram() {
       const nazwaProduktu = $("nazwa-produktu").value.trim();
       const numerHarmonogramu = $("numer-harmonogramu").value.trim();
 
@@ -96,36 +62,40 @@
       }
 
       const periods = Array.from(document.querySelectorAll(".period-input"))
-                           .map(input => input.value.trim())
-                           .filter(v => v);
-
-      if (periods.length === 0) {
-        alert("Dodaj przynajmniej jeden okres!");
-        return;
-      }
+                           .map(i => i.value.trim()).filter(v => v);
 
       const rows = [];
       document.querySelectorAll("#harmonogram-table tbody tr").forEach(row => {
         const nazwa = row.cells[0].textContent;
-        const values = Array.from(row.querySelectorAll("input")).map(input => input.value.trim());
+        const values = Array.from(row.querySelectorAll("input")).map(i => i.value.trim());
         rows.push({ nazwa, values });
       });
 
-      try {
-        await addDoc(collection(db, "harmonogramy"), {
-          nazwaProduktu,
-          numerHarmonogramu,
-          periods,
-          rows,
-          createdBy: currentUserEmail,
-          createdAt: Timestamp.now()
-        });
+      const data = {
+        nazwaProduktu,
+        numerHarmonogramu,
+        periods,
+        rows,
+        createdBy: currentUserEmail,
+        createdAt: Timestamp.now()
+      };
 
-        alert("Harmonogram zapisany pomyślnie!");
+      try {
+        if (currentEditingId) {
+          // Edycja istniejącego
+          await updateDoc(doc(db, "harmonogramy", currentEditingId), data);
+          alert("Harmonogram zaktualizowany!");
+        } else {
+          // Nowe zlecenie
+          await addDoc(collection(db, "harmonogramy"), data);
+          alert("Harmonogram zapisany!");
+        }
+
         hide($("form-section"));
+        currentEditingId = null;
         loadHarmonogramy();
       } catch (err) {
-        alert("Błąd zapisu: " + err.message);
+        alert("Błąd: " + err.message);
       }
     }
 
@@ -143,12 +113,10 @@
 
       doc.setFontSize(12);
       doc.text(`Produkt: ${nazwa}`, 20, 30);
-      doc.text(`Numer harmonogramu: ${numer}`, 20, 40);
+      doc.text(`Numer: ${numer}`, 20, 40);
 
       const headers = ["Pozycja"];
-      document.querySelectorAll(".period-header").forEach(th => {
-        headers.push(th.textContent.split('\n')[0]);
-      });
+      document.querySelectorAll(".period-header").forEach(th => headers.push(th.textContent.split('\n')[0]));
 
       const body = [];
       document.querySelectorAll("#harmonogram-table tbody tr").forEach(row => {
@@ -157,19 +125,96 @@
         body.push(rowData);
       });
 
-      doc.autoTable({
-        startY: 50,
-        head: [headers],
-        body: body,
-        theme: 'grid',
-        styles: { font: "times", fontSize: 10 },
-        headStyles: { fillColor: [66, 139, 202] }
-      });
-
+      doc.autoTable({ startY: 50, head: [headers], body: body, theme: 'grid', styles: { font: "times", fontSize: 10 } });
       doc.save(`Harmonogram_${numer}.pdf`);
     }
 
-    // === Dodawanie okresu ===
+    // === Ładowanie listy harmonogramów z przyciskami ===
+    async function loadHarmonogramy() {
+      const container = $("harmonogramy-list");
+      container.innerHTML = "<p>Ładowanie...</p>";
+
+      try {
+        const q = query(collection(db, "harmonogramy"), orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
+        container.innerHTML = "";
+
+        if (snap.empty) {
+          container.innerHTML = "<p>Brak harmonogramów produkcji.</p>";
+          return;
+        }
+
+        snap.forEach(docSnap => {
+          const d = docSnap.data();
+          const id = docSnap.id;
+
+          const div = document.createElement("div");
+          div.className = "harmonogram-item";
+          div.innerHTML = `
+            <div>
+              <strong>${d.numerHarmonogramu}</strong> — ${d.nazwaProduktu}<br>
+              <small>Utworzony przez: ${d.createdBy}</small>
+            </div>
+          `;
+
+          const btns = document.createElement("div");
+          const openBtn = document.createElement("button");
+          openBtn.textContent = "Otwórz";
+          openBtn.onclick = () => openHarmonogram(id, d);
+
+          const pdfBtn = document.createElement("button");
+          pdfBtn.textContent = "PDF";
+          pdfBtn.style.marginLeft = "10px";
+          pdfBtn.onclick = () => {
+            // Tymczasowo ładujemy dane do formularza i generujemy PDF
+            openHarmonogram(id, d);
+            setTimeout(exportToPDF, 300);
+          };
+
+          btns.appendChild(openBtn);
+          btns.appendChild(pdfBtn);
+          div.appendChild(btns);
+          container.appendChild(div);
+        });
+      } catch (err) {
+        container.innerHTML = `<p style="color:#c00">Błąd: ${err.message}</p>`;
+      }
+    }
+
+    // === Otwieranie istniejącego harmonogramu do edycji ===
+    async function openHarmonogram(id, data) {
+      currentEditingId = id;
+
+      $("nazwa-produktu").value = data.nazwaProduktu || "";
+      $("numer-harmonogramu").value = data.numerHarmonogramu || "";
+
+      // Wypełniamy tabelę
+      initTable(); // czyścimy tabelę
+
+      // Dodajemy kolumny
+      data.periods.forEach((period, index) => {
+        if (index > 0) addPeriod(); // pierwsza jest już dodana
+        const inputs = document.querySelectorAll(".period-input");
+        inputs[index].value = period;
+      });
+
+      // Wypełniamy wiersze
+      const tbody = $("harmonogram-table").querySelector("tbody");
+      data.rows.forEach((row, i) => {
+        const tr = tbody.rows[i];
+        if (tr) {
+          const inputs = tr.querySelectorAll("input");
+          row.values.forEach((val, j) => {
+            if (inputs[j]) inputs[j].value = val;
+          });
+        }
+      });
+
+      show($("form-section"));
+    }
+
+    // Reszta funkcji (addPeriod, initTable, addAutoCalculate) pozostaje taka sama jak wcześniej
+
     function addPeriod() {
       const headerRow = document.querySelector("#harmonogram-table thead tr");
       const colCount = headerRow.children.length;
@@ -186,7 +231,6 @@
       });
     }
 
-    // === Inicjalizacja tabeli ===
     function initTable() {
       const table = $("harmonogram-table");
       table.innerHTML = `
@@ -206,79 +250,39 @@
       `;
     }
 
-    // Automatyczne obliczanie netto
     function addAutoCalculate() {
       const table = document.getElementById("harmonogram-table");
-      if (table) {
-        table.addEventListener("input", () => {
-          const rows = table.querySelectorAll("tbody tr");
-          if (rows.length < 3) return;
-          const bruttoInputs = rows[0].querySelectorAll("input");
-          const stanInputs = rows[1].querySelectorAll("input");
-          const nettoInputs = rows[2].querySelectorAll("input");
+      if (table) table.addEventListener("input", () => {
+        const rows = table.querySelectorAll("tbody tr");
+        if (rows.length < 3) return;
+        const brutto = rows[0].querySelectorAll("input");
+        const stan = rows[1].querySelectorAll("input");
+        const netto = rows[2].querySelectorAll("input");
 
-          for (let i = 0; i < bruttoInputs.length; i++) {
-            const brutto = parseFloat(bruttoInputs[i].value) || 0;
-            const stan = parseFloat(stanInputs[i].value) || 0;
-            nettoInputs[i].value = (brutto - stan).toFixed(2);
-          }
-        });
-      }
-    }
-
-    // Ładowanie listy harmonogramów
-    async function loadHarmonogramy() {
-      const container = $("harmonogramy-list");
-      container.innerHTML = "<p>Ładowanie...</p>";
-
-      try {
-        const q = query(collection(db, "harmonogramy"), orderBy("createdAt", "desc"));
-        const snap = await getDocs(q);
-        container.innerHTML = "";
-
-        if (snap.empty) {
-          container.innerHTML = "<p>Brak harmonogramów.</p>";
-          return;
+        for (let i = 0; i < brutto.length; i++) {
+          const b = parseFloat(brutto[i].value) || 0;
+          const s = parseFloat(stan[i].value) || 0;
+          netto[i].value = (b - s).toFixed(2);
         }
-
-        snap.forEach(docSnap => {
-          const d = docSnap.data();
-          const div = document.createElement("div");
-          div.style = "border:1px solid #ddd; padding:1rem; margin:1rem 0; border-radius:8px; background:white;";
-          div.innerHTML = `
-            <h3>${d.numerHarmonogramu} — ${d.nazwaProduktu}</h3>
-            <small>Utworzony przez: ${d.createdBy} • ${d.createdAt.toDate().toLocaleString('pl-PL')}</small>
-          `;
-          container.appendChild(div);
-        });
-      } catch (err) {
-        container.innerHTML = `<p style="color:#c00">Błąd: ${err.message}</p>`;
-      }
+      });
     }
 
-    // Główny listener autentykacji
     onAuthStateChanged(auth, user => {
-      if (!user) {
-        window.location.href = "index.html";
-        return;
-      }
-
+      if (!user) { window.location.href = "index.html"; return; }
       currentUserEmail = user.email;
       hide($("loading"));
       show($("content"));
       $("current-user").textContent = user.email;
-
       loadHarmonogramy();
       initTable();
       addAutoCalculate();
     });
 
-    // Event listeners po załadowaniu DOM
     document.addEventListener("DOMContentLoaded", () => {
       $("btn-logout")?.addEventListener("click", () => signOut(auth));
-      $("btn-nowy-harmonogram")?.addEventListener("click", () => show($("form-section")));
+      $("btn-nowy-harmonogram")?.addEventListener("click", () => { currentEditingId = null; show($("form-section")); });
       $("btn-anuluj")?.addEventListener("click", () => hide($("form-section")));
-      $("btn-zapisz-harmonogram")?.addEventListener("click", createHarmonogram);
+      $("btn-zapisz-harmonogram")?.addEventListener("click", saveHarmonogram);
       $("btn-dodaj-okres")?.addEventListener("click", addPeriod);
       $("btn-export-pdf")?.addEventListener("click", exportToPDF);
     });
@@ -303,9 +307,8 @@
 
     <button id="btn-nowy-harmonogram" style="margin:1.5rem 0;">Nowy harmonogram produkcji</button>
 
-    <!-- Formularz -->
     <div id="form-section" class="hidden" style="background:white; padding:1.5rem; border-radius:8px; border:1px solid #ddd;">
-      <h2>Nowy harmonogram produkcji</h2>
+      <h2>Harmonogram produkcji</h2>
       <input id="nazwa-produktu" placeholder="Nazwa produktu">
       <input id="numer-harmonogramu" placeholder="Numer harmonogramu">
 
@@ -316,7 +319,7 @@
 
       <div style="margin-top:1.5rem;">
         <button id="btn-export-pdf">Pobierz jako PDF</button>
-        <button id="btn-zapisz-harmonogram">Zapisz harmonogram</button>
+        <button id="btn-zapisz-harmonogram">Zapisz zmiany</button>
         <button id="btn-anuluj" style="background:#757575; margin-left:1rem;">Anuluj</button>
       </div>
     </div>
