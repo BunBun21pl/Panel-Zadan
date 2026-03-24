@@ -40,11 +40,21 @@
     }
     th { background: #e3f2fd; }
     .period-header { background: #bbdefb; font-weight: bold; }
-    nav { margin: 1.5rem 0; padding: 1rem; background: #f0f0f0; border-radius: 8px; }
-    nav a { margin-right: 1.5rem; color: #0066cc; text-decoration: none; font-weight: 500; }
+    nav { 
+      margin: 1.5rem 0; 
+      padding: 1rem; 
+      background: #f0f0f0; 
+      border-radius: 8px; 
+    }
+    nav a { 
+      margin-right: 1.5rem; 
+      color: #0066cc; 
+      text-decoration: none; 
+      font-weight: 500; 
+    }
   </style>
 
-  <!-- jsPDF + AutoTable -->
+  <!-- jsPDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 
@@ -70,7 +80,7 @@
 
     let currentUserEmail = "";
 
-    // === Helpers ===
+    // === Helpers - zdefiniowane na samym początku ===
     const $ = id => document.getElementById(id);
     const show = el => el?.classList.remove("hidden");
     const hide = el => el?.classList.add("hidden");
@@ -143,9 +153,7 @@
       const body = [];
       document.querySelectorAll("#harmonogram-table tbody tr").forEach(row => {
         const rowData = [row.cells[0].textContent];
-        row.querySelectorAll("input").forEach(input => {
-          rowData.push(input.value || "-");
-        });
+        row.querySelectorAll("input").forEach(input => rowData.push(input.value || "-"));
         body.push(rowData);
       });
 
@@ -200,21 +208,25 @@
 
     // Automatyczne obliczanie netto
     function addAutoCalculate() {
-      document.getElementById("harmonogram-table").addEventListener("input", () => {
-        const rows = document.querySelectorAll("#harmonogram-table tbody tr");
-        const bruttoInputs = rows[0].querySelectorAll("input");
-        const stanInputs = rows[1].querySelectorAll("input");
-        const nettoInputs = rows[2].querySelectorAll("input");
+      const table = document.getElementById("harmonogram-table");
+      if (table) {
+        table.addEventListener("input", () => {
+          const rows = table.querySelectorAll("tbody tr");
+          if (rows.length < 3) return;
+          const bruttoInputs = rows[0].querySelectorAll("input");
+          const stanInputs = rows[1].querySelectorAll("input");
+          const nettoInputs = rows[2].querySelectorAll("input");
 
-        for (let i = 0; i < bruttoInputs.length; i++) {
-          const brutto = parseFloat(bruttoInputs[i].value) || 0;
-          const stan = parseFloat(stanInputs[i].value) || 0;
-          nettoInputs[i].value = (brutto - stan).toFixed(2);
-        }
-      });
+          for (let i = 0; i < bruttoInputs.length; i++) {
+            const brutto = parseFloat(bruttoInputs[i].value) || 0;
+            const stan = parseFloat(stanInputs[i].value) || 0;
+            nettoInputs[i].value = (brutto - stan).toFixed(2);
+          }
+        });
+      }
     }
 
-    // Ładowanie listy
+    // Ładowanie listy harmonogramów
     async function loadHarmonogramy() {
       const container = $("harmonogramy-list");
       container.innerHTML = "<p>Ładowanie...</p>";
@@ -244,7 +256,7 @@
       }
     }
 
-    // Główny listener
+    // Główny listener autentykacji
     onAuthStateChanged(auth, user => {
       if (!user) {
         window.location.href = "index.html";
@@ -261,6 +273,7 @@
       addAutoCalculate();
     });
 
+    // Event listeners po załadowaniu DOM
     document.addEventListener("DOMContentLoaded", () => {
       $("btn-logout")?.addEventListener("click", () => signOut(auth));
       $("btn-nowy-harmonogram")?.addEventListener("click", () => show($("form-section")));
