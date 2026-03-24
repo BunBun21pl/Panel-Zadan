@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Harmonogram produkcji – 3tla.local</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 1300px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      background: #f9f9f9;
+    }
+    .hidden { display: none; }
+    input, textarea, button {
+      padding: 0.7rem;
+      margin: 0.5rem 0;
+      font-size: 1rem;
+    }
+    button {
+      background: #0066cc;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button:hover { background: #0055aa; }
+    button.logout { background: #c00; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+      background: white;
+    }
+    th, td {
+      border: 1px solid #aaa;
+      padding: 0.8rem;
+      text-align: center;
+    }
+    th {
+      background: #e3f2fd;
+      font-weight: 600;
+    }
+    .period-header {
+      background: #bbdefb;
+      font-weight: bold;
+    }
+    nav {
+      margin: 1.5rem 0;
+      padding: 1rem;
+      background: #f0f0f0;
+      border-radius: 8px;
+    }
+    nav a {
+      margin-right: 1.5rem;
+      color: #0066cc;
+      text-decoration: none;
+      font-weight: 500;
+    }
+  </style>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, getDocs, Timestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyACzVKOmFK87VJJvBGCW921yrxbpKgYEKU",
+      authDomain: "iiitla-zadania.firebaseapp.com",
+      projectId: "iiitla-zadania",
+      storageBucket: "iiitla-zadania.firebasestorage.app",
+      messagingSenderId: "753248383455",
+      appId: "1:753248383455:web:f39ab717514c979913146a",
+      measurementId: "G-9DQCJ8T5QQ"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    let currentUserEmail = "";
+
+    const $ = id => document.getElementById(id);
+    const show = el => el?.classList.remove("hidden");
+    const hide = el => el?.classList.add("hidden");
+
+    // === Tworzenie nowego harmonogramu ===
+    async function createHarmonogram() {
+      const nazwaProduktu = $("nazwa-produktu").value.trim();
+      const numerHarmonogramu = $("numer-harmonogramu").value.trim();
+
+      if (!nazwaProduktu || !numerHarmonogramu) {
+        alert("Wypełnij nazwę produktu i numer harmonogramu!");
+        return;
+      }
+
+      const periods = [];
+      const periodInputs = document.querySelectorAll(".period-input");
+      periodInputs.forEach(input => {
+        if (input.value.trim()) periods.push(input.value.trim());
+      });
+
+      if (periods.length === 0) {
+        alert("Dodaj przynajmniej jeden okres!");
+        return;
+      }
+
+      // Zbieranie danych z tabeli
+      const rows = [];
+      const rowElements = document.querySelectorAll("#harmonogram-table tbody tr");
+      rowElements.forEach(row => {
+        const cells = row.querySelectorAll("td input");
+        const rowData = {
+          nazwa: row.querySelector("td:first-child").textContent,
+          values: Array.from(cells).map(input => input.value.trim())
+        };
+        rows.push(rowData);
+      });
+
+      try {
+        await addDoc(collection(db, "harmonogramy"), {
+          nazwaProduktu,
+          numerHarmonogramu,
+          periods,
+          rows,
+          createdBy: currentUserEmail,
+          createdAt: Timestamp.now()
+        });
+
+        alert("Harmonogram produkcji został zapisany!");
+        $("nazwa-produktu").value = "";
+        $("numer-harmonogramu").value = "";
+        hide($("form-section"));
+        loadHarmonogramy();
+      } catch (err) {
+        alert("Błąd zapisu: " + err.message);
+        console.error(err);
+      }
+    }
+
+    // === Ładowanie listy harmonogramów ===
+    async function loadHarmonogramy() {
+      const container = $("harmonogramy-list");
+      container.innerHTML = "<p>Ładowanie harmonogramów...</p>";
+
+      try {
+        const q = query(collection(db, "harmonogramy"), orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
+
+        container.innerHTML = "";
+
+        if (snap.empty) {
+          container.innerHTML = "<p>Nie ma jeszcze żadnych harmonogramów produkcji.</p>";
+          return;
+        }
+
+        snap.forEach(docSnap => {
+          const d = docSnap.data();
+          const div = document.createElement("div");
+          div.className = "zlecenie"; // reuse style
+          div.innerHTML = `
+            <h3>Harmonogram nr ${d.numerHarmonogramu} — ${d.nazwaProduktu}</h3>
+            <p><small>Utworzony przez: ${d.createdBy} • ${d.createdAt.toDate().toLocaleString('pl-PL')}</small></p>
+          `;
+          container.appendChild(div);
+        });
+      } catch (err) {
+        container.innerHTML = `<p style="color:#c00">Błąd ładowania: ${err.message}</p>`;
+      }
+    }
+
+    // === Dodawanie kolumny (okresu) ===
+    function addPeriod() {
+      const headerRow = document.querySelector("#harmonogram-table thead tr");
+      const newTh = document.createElement("th");
+      newTh.className = "period-header";
+      newTh.innerHTML = `Okres ${headerRow.children.length - 1}<br><input type="text" class="period-input" placeholder="np. Tydzień 5" style="width:90%; margin-top:4px;">`;
+      headerRow.appendChild(newTh);
+
+      // Dodaj komórki do każdego wiersza
+      document.querySelectorAll("#harmonogram-table tbody tr").forEach(row => {
+        const td = document.createElement("td");
+        td.innerHTML = `<input type="text" placeholder="wartość">`;
+        row.appendChild(td);
+      });
+    }
+
+    // Inicjalizacja tabeli
+    function initTable() {
+      const table = $("harmonogram-table");
+      table.innerHTML = `
+        <thead>
+          <tr>
+            <th style="width:250px;">Pozycja</th>
+            <th class="period-header">Okres 1<br><input type="text" class="period-input" placeholder="np. Tydzień 1"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Zapotrzebowanie brutto</td><td><input type="text"></td></tr>
+          <tr><td>Stan magazynowy</td><td><input type="text"></td></tr>
+          <tr><td>Zapotrzebowanie netto</td><td><input type="text"></td></tr>
+          <tr><td>Dostawa</td><td><input type="text"></td></tr>
+          <tr><td>Zamówienie</td><td><input type="text"></td></tr>
+        </tbody>
+      `;
+    }
+
+    // Nasłuch logowania
+    onAuthStateChanged(auth, user => {
+      if (!user) {
+        window.location.href = "index.html";
+        return;
+      }
+
+      currentUserEmail = user.email;
+      hide($("loading"));
+      show($("content"));
+      $("current-user").textContent = user.email;
+      loadHarmonogramy();
+      initTable();
+    });
+
+    document.addEventListener("DOMContentLoaded", () => {
+      $("btn-logout")?.addEventListener("click", () => signOut(auth));
+      $("btn-nowy-harmonogram")?.addEventListener("click", () => show($("form-section")));
+      $("btn-anuluj")?.addEventListener("click", () => hide($("form-section")));
+      $("btn-zapisz-harmonogram")?.addEventListener("click", createHarmonogram);
+      $("btn-dodaj-okres")?.addEventListener("click", addPeriod);
+    });
+  </script>
+</head>
+<body>
+
+  <div id="loading">
+    <h2>Ładowanie...</h2>
+  </div>
+
+  <div id="content" class="hidden">
+    <nav>
+      <a href="index.html">← Strona główna / Zadania</a>
+      <a href="oceny.html">Oceny</a>
+      <a href="dokumenty.html">Faktury</a>
+      <a href="produkcja.html">Produkcja</a>
+      <a href="https://zspsycow-3tla-gr11.odoo.com" target="_blank">WMS</a>
+    </nav>
+
+    <h1>Harmonogram produkcji</h1>
+    <p>Zalogowany jako: <strong id="current-user"></strong></p>
+    <button id="btn-logout" class="logout">Wyloguj się</button>
+
+    <div style="margin: 2rem 0;">
+      <button id="btn-nowy-harmonogram">Nowy harmonogram produkcji</button>
+    </div>
+
+    <!-- Formularz tworzenia harmonogramu -->
+    <div id="form-section" class="hidden" style="background:white; padding:1.5rem; border-radius:8px; border:1px solid #ddd;">
+      <h2>Nowy harmonogram produkcji</h2>
+
+      <input id="nazwa-produktu" placeholder="Nazwa produktu" required>
+      <input id="numer-harmonogramu" placeholder="Numer harmonogramu" required>
+
+      <h3>Okresy czasowe</h3>
+      <button id="btn-dodaj-okres">+ Dodaj kolejny okres</button>
+
+      <table id="harmonogram-table"></table>
+
+      <div style="margin-top: 1.5rem;">
+        <button id="btn-zapisz-harmonogram">Zapisz harmonogram</button>
+        <button id="btn-anuluj" style="background:#757575; margin-left:1rem;">Anuluj</button>
+      </div>
+    </div>
+
+    <h2>Lista harmonogramów produkcji</h2>
+    <div id="harmonogramy-list"></div>
+  </div>
+
+</body>
+</html>
