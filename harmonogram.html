@@ -70,9 +70,12 @@
 
     let currentUserEmail = "";
 
+    // === Helpers ===
     const $ = id => document.getElementById(id);
+    const show = el => el?.classList.remove("hidden");
+    const hide = el => el?.classList.add("hidden");
 
-    // === Tworzenie nowego harmonogramu ===
+    // === Tworzenie harmonogramu ===
     async function createHarmonogram() {
       const nazwaProduktu = $("nazwa-produktu").value.trim();
       const numerHarmonogramu = $("numer-harmonogramu").value.trim();
@@ -82,7 +85,9 @@
         return;
       }
 
-      const periods = Array.from(document.querySelectorAll(".period-input")).map(input => input.value.trim()).filter(v => v);
+      const periods = Array.from(document.querySelectorAll(".period-input"))
+                           .map(input => input.value.trim())
+                           .filter(v => v);
 
       if (periods.length === 0) {
         alert("Dodaj przynajmniej jeden okres!");
@@ -106,7 +111,7 @@
           createdAt: Timestamp.now()
         });
 
-        alert("Harmonogram zapisany!");
+        alert("Harmonogram zapisany pomyślnie!");
         hide($("form-section"));
         loadHarmonogramy();
       } catch (err) {
@@ -130,7 +135,6 @@
       doc.text(`Produkt: ${nazwa}`, 20, 30);
       doc.text(`Numer harmonogramu: ${numer}`, 20, 40);
 
-      // Zbieranie danych z tabeli
       const headers = ["Pozycja"];
       document.querySelectorAll(".period-header").forEach(th => {
         headers.push(th.textContent.split('\n')[0]);
@@ -154,7 +158,7 @@
         headStyles: { fillColor: [66, 139, 202] }
       });
 
-      doc.save(`Harmonogram_${numer}_${nazwa.replace(/ /g, '_')}.pdf`);
+      doc.save(`Harmonogram_${numer}.pdf`);
     }
 
     // === Dodawanie okresu ===
@@ -194,28 +198,19 @@
       `;
     }
 
-    // Automatyczne obliczanie zapotrzebowania netto
-    function calculateNetto() {
-      const rows = document.querySelectorAll("#harmonogram-table tbody tr");
-      const bruttoRow = rows[0];
-      const stanRow = rows[1];
-      const nettoRow = rows[2];
-
-      const bruttoInputs = bruttoRow.querySelectorAll("input");
-      const stanInputs = stanRow.querySelectorAll("input");
-      const nettoInputs = nettoRow.querySelectorAll("input");
-
-      for (let i = 0; i < bruttoInputs.length; i++) {
-        const brutto = parseFloat(bruttoInputs[i].value) || 0;
-        const stan = parseFloat(stanInputs[i].value) || 0;
-        nettoInputs[i].value = (brutto - stan).toFixed(2);
-      }
-    }
-
-    // Nasłuch zmian w tabeli
+    // Automatyczne obliczanie netto
     function addAutoCalculate() {
-      document.getElementById("harmonogram-table").addEventListener("input", (e) => {
-        if (e.target.tagName === "INPUT") calculateNetto();
+      document.getElementById("harmonogram-table").addEventListener("input", () => {
+        const rows = document.querySelectorAll("#harmonogram-table tbody tr");
+        const bruttoInputs = rows[0].querySelectorAll("input");
+        const stanInputs = rows[1].querySelectorAll("input");
+        const nettoInputs = rows[2].querySelectorAll("input");
+
+        for (let i = 0; i < bruttoInputs.length; i++) {
+          const brutto = parseFloat(bruttoInputs[i].value) || 0;
+          const stan = parseFloat(stanInputs[i].value) || 0;
+          nettoInputs[i].value = (brutto - stan).toFixed(2);
+        }
       });
     }
 
@@ -249,16 +244,18 @@
       }
     }
 
-    // Inicjalizacja
+    // Główny listener
     onAuthStateChanged(auth, user => {
       if (!user) {
         window.location.href = "index.html";
         return;
       }
+
       currentUserEmail = user.email;
       hide($("loading"));
       show($("content"));
       $("current-user").textContent = user.email;
+
       loadHarmonogramy();
       initTable();
       addAutoCalculate();
