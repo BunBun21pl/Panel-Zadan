@@ -63,7 +63,7 @@
       }
 
       try {
-        await addDoc(collection(db, "arkusze_ocen"), {
+        const docRef = await addDoc(collection(db, "arkusze_ocen"), {
           nazwa,
           createdBy: currentUserEmail,
           createdAt: Timestamp.now(),
@@ -75,7 +75,7 @@
         hide($("form-arkusz"));
         loadArkusze();
       } catch (err) {
-        alert("Błąd: " + err.message);
+        alert("Błąd tworzenia: " + err.message);
       }
     }
 
@@ -90,7 +90,7 @@
         container.innerHTML = "";
 
         if (snap.empty) {
-          container.innerHTML = "<p>Brak arkuszy ocen.</p>";
+          container.innerHTML = "<p>Brak arkuszy.</p>";
           return;
         }
 
@@ -141,17 +141,13 @@
       }
     }
 
-    // Dodawanie ucznia
     window.addUczienRow = function(imie = "") {
       const tbody = $("oceny-table").querySelector("tbody");
       const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td><input type="text" class="uczen-input" value="${imie}" placeholder="Imię i nazwisko ucznia"></td>
-      `;
+      tr.innerHTML = `<td><input type="text" class="uczen-input" value="${imie}" placeholder="Imię i nazwisko"></td>`;
       tbody.appendChild(tr);
     };
 
-    // Dodawanie kolumny
     window.addKolumna = function() {
       const dataZadania = prompt("Podaj datę zadania (np. 2026-04-20):");
       if (!dataZadania) return;
@@ -176,7 +172,10 @@
 
     // Zapisywanie arkusza
     async function saveArkusz() {
-      if (!currentArkuszId) return;
+      if (!currentArkuszId) {
+        alert("Nie wybrano arkusza do zapisu!");
+        return;
+      }
 
       const uczniowie = Array.from(document.querySelectorAll(".uczen-input"))
                              .map(input => input.value.trim())
@@ -189,8 +188,8 @@
 
       try {
         await updateDoc(doc(db, "arkusze_ocen", currentArkuszId), {
-          uczniowie,
-          kolumny,
+          uczniowie: uczniowie,
+          kolumny: kolumny,
           lastModified: Timestamp.now()
         });
 
@@ -199,7 +198,8 @@
         show($("arkusze-list"));
         loadArkusze();
       } catch (err) {
-        alert("Błąd zapisu: " + err.message);
+        alert("Błąd zapisu arkusza:\n" + err.message);
+        console.error(err);
       }
     }
 
@@ -209,7 +209,7 @@
       currentUserEmail = user.email;
 
       if (!isAdmin(user.email)) {
-        document.body.innerHTML = `<div style="text-align:center;padding:5rem;"><h2>Brak dostępu</h2><p>Tylko administratorzy mają dostęp do arkuszy ocen.</p><a href="index.html">← Powrót</a></div>`;
+        document.body.innerHTML = `<div style="text-align:center;padding:5rem;"><h2>Brak dostępu</h2><p>Tylko administratorzy mają dostęp.</p><a href="index.html">← Powrót</a></div>`;
         return;
       }
 
