@@ -5,75 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Arkusze ocen – 3tla.local</title>
   <style>
-    body {
-      font-family: system-ui, sans-serif;
-      max-width: 1400px;
-      margin: 2rem auto;
-      padding: 0 1rem;
-      background: #f9f9f9;
-    }
+    body { font-family: system-ui, sans-serif; max-width: 1400px; margin: 2rem auto; padding: 0 1rem; background: #f9f9f9; }
     .hidden { display: none; }
-    input, button, select {
-      padding: 0.7rem;
-      margin: 0.4rem 0;
-      font-size: 1rem;
-    }
-    button {
-      background: #0066cc;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-    }
+    input, button { padding: 0.7rem; margin: 0.4rem 0; font-size: 1rem; }
+    button { background: #0066cc; color: white; border: none; border-radius: 6px; cursor: pointer; }
     button:hover { background: #0055aa; }
     button.red { background: #c00; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 1.5rem 0;
-      background: white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    th, td {
-      border: 1px solid #999;
-      padding: 0.8rem;
-      text-align: center;
-      min-width: 100px;
-    }
-    th { 
-      background: #e3f2fd; 
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-    .uczniowie-col { 
-      background: #c8e6c9; 
-      width: 240px; 
-      text-align: left;
-      padding-left: 15px;
-      font-weight: bold;
-    }
-    nav {
-      margin: 1.5rem 0;
-      padding: 1rem;
-      background: #f0f0f0;
-      border-radius: 8px;
-    }
-    nav a {
-      margin-right: 1.5rem;
-      color: #0066cc;
-      text-decoration: none;
-      font-weight: 500;
-    }
+    table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; background: white; }
+    th, td { border: 1px solid #999; padding: 0.8rem; text-align: center; }
+    th { background: #e3f2fd; position: sticky; top: 0; z-index: 10; }
+    .uczniowie-col { background: #c8e6c9; width: 240px; text-align: left; padding-left: 15px; font-weight: bold; }
+    nav { margin: 1.5rem 0; padding: 1rem; background: #f0f0f0; border-radius: 8px; }
+    nav a { margin-right: 1.5rem; color: #0066cc; text-decoration: none; font-weight: 500; }
     .arkusz-item {
-      border: 1px solid #ddd;
-      padding: 1.2rem;
-      margin: 1rem 0;
-      border-radius: 8px;
-      background: white;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      border: 1px solid #ddd; padding: 1rem; margin: 1rem 0; border-radius: 8px; background: white;
+      display: flex; justify-content: space-between; align-items: center;
     }
   </style>
 
@@ -112,7 +58,7 @@
     async function createArkusz() {
       const nazwa = $("arkusz-nazwa").value.trim();
       if (!nazwa) {
-        alert("Podaj nazwę arkusza ocen!");
+        alert("Podaj nazwę arkusza!");
         return;
       }
 
@@ -125,7 +71,7 @@
           kolumny: []
         });
 
-        alert("Arkusz utworzony pomyślnie!");
+        alert("Arkusz utworzony!");
         hide($("form-arkusz"));
         loadArkusze();
       } catch (err) {
@@ -133,7 +79,7 @@
       }
     }
 
-    // Ładowanie listy arkuszy
+    // Ładowanie listy
     async function loadArkusze() {
       const container = $("arkusze-list");
       container.innerHTML = "<p>Ładowanie...</p>";
@@ -155,17 +101,13 @@
           const div = document.createElement("div");
           div.className = "arkusz-item";
           div.innerHTML = `
-            <div>
-              <strong>${d.nazwa}</strong><br>
-              <small>Utworzony: ${d.createdAt.toDate().toLocaleDateString('pl-PL')}</small>
-            </div>
+            <div><strong>${d.nazwa}</strong><br><small>${d.createdAt.toDate().toLocaleDateString('pl-PL')}</small></div>
           `;
 
           const btn = document.createElement("button");
-          btn.textContent = "Otwórz arkusz";
+          btn.textContent = "Otwórz";
           btn.onclick = () => openArkusz(id, d);
           div.appendChild(btn);
-
           container.appendChild(div);
         });
       } catch (err) {
@@ -173,7 +115,7 @@
       }
     }
 
-    // Otwieranie arkusza do edycji
+    // Otwieranie arkusza
     function openArkusz(id, data) {
       currentArkuszId = id;
       hide($("arkusze-list"));
@@ -183,14 +125,14 @@
       const tbody = $("oceny-table").querySelector("tbody");
       tbody.innerHTML = "";
 
-      // Dodaj uczniów
+      // Uczniowie
       if (data.uczniowie && data.uczniowie.length > 0) {
         data.uczniowie.forEach(name => addUczienRow(name));
       } else {
         addUczienRow("");
       }
 
-      // Dodaj kolumny
+      // Kolumny
       const headerRow = $("oceny-table").querySelector("thead tr");
       headerRow.innerHTML = '<th class="uczniowie-col">Uczeń</th>';
 
@@ -199,30 +141,29 @@
       }
     }
 
-    // Dodawanie wiersza ucznia
-    function addUczienRow(imie = "") {
+    // Dodawanie ucznia
+    window.addUczienRow = function(imie = "") {
       const tbody = $("oceny-table").querySelector("tbody");
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td><input type="text" class="uczen-input" value="${imie}" placeholder="Imię i nazwisko ucznia"></td>
       `;
       tbody.appendChild(tr);
-    }
+    };
 
-    // Dodawanie nowej kolumny (data zadania)
-    function addKolumna() {
+    // Dodawanie kolumny
+    window.addKolumna = function() {
       const dataZadania = prompt("Podaj datę zadania (np. 2026-04-20):");
       if (!dataZadania) return;
       addKolumnaZData(dataZadania);
-    }
+    };
 
     function addKolumnaZData(dataZadania) {
       const headerRow = $("oceny-table").querySelector("thead tr");
       const th = document.createElement("th");
-      th.innerHTML = `${dataZadania}<br><button onclick="this.parentElement.remove()" class="red" style="font-size:0.75rem; padding:2px 6px;">×</button>`;
+      th.innerHTML = `${dataZadania}<br><button onclick="this.parentElement.remove()" class="red" style="font-size:0.75rem;">×</button>`;
       headerRow.appendChild(th);
 
-      // Dodaj komórki do każdego wiersza ucznia
       document.querySelectorAll("#oceny-table tbody tr").forEach(row => {
         const td = document.createElement("td");
         td.innerHTML = `
@@ -253,7 +194,7 @@
           lastModified: Timestamp.now()
         });
 
-        alert("Arkusz ocen został zapisany!");
+        alert("Arkusz zapisany pomyślnie!");
         hide($("arkusz-form"));
         show($("arkusze-list"));
         loadArkusze();
@@ -263,15 +204,12 @@
     }
 
     onAuthStateChanged(auth, user => {
-      if (!user) {
-        window.location.href = "index.html";
-        return;
-      }
+      if (!user) { window.location.href = "index.html"; return; }
 
       currentUserEmail = user.email;
 
       if (!isAdmin(user.email)) {
-        document.body.innerHTML = `<div style="text-align:center; padding:5rem;"><h2>Brak dostępu</h2><p>Tylko administratorzy mają dostęp.</p><a href="index.html">← Powrót</a></div>`;
+        document.body.innerHTML = `<div style="text-align:center;padding:5rem;"><h2>Brak dostępu</h2><p>Tylko administratorzy mają dostęp do arkuszy ocen.</p><a href="index.html">← Powrót</a></div>`;
         return;
       }
 
@@ -311,7 +249,6 @@
 
     <button id="btn-nowy-arkusz" style="margin:1.5rem 0;">Nowy arkusz ocen</button>
 
-    <!-- Tworzenie nowego arkusza -->
     <div id="form-arkusz" class="hidden" style="background:white; padding:2rem; border-radius:8px; border:1px solid #ddd;">
       <h2>Nowy arkusz ocen</h2>
       <input id="arkusz-nazwa" placeholder="Nazwa arkusza (np. JavaScript - Grupa 11)" style="width:100%; font-size:1.1rem;">
@@ -321,13 +258,12 @@
       </div>
     </div>
 
-    <!-- Edycja arkusza -->
     <div id="arkusz-form" class="hidden">
       <h2 id="arkusz-tytul"></h2>
 
       <div style="margin:1rem 0;">
-        <button onclick="addUczienRow('')">+ Dodaj ucznia</button>
-        <button onclick="addKolumna()">+ Dodaj zadanie / datę</button>
+        <button id="btn-dodaj-ucznia">+ Dodaj ucznia</button>
+        <button id="btn-dodaj-kolumne">+ Dodaj zadanie / datę</button>
         <button onclick="saveArkusz()" style="background:#2e7d32;">Zapisz arkusz</button>
         <button onclick="hide($('arkusz-form')); show($('arkusze-list'))" style="background:#757575;">Powrót do listy</button>
       </div>
@@ -342,7 +278,6 @@
       </table>
     </div>
 
-    <!-- Lista arkuszy -->
     <div id="arkusze-list"></div>
   </div>
 
