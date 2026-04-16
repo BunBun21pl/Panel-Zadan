@@ -32,28 +32,27 @@
       border-collapse: collapse;
       margin: 1.5rem 0;
       background: white;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     th, td {
       border: 1px solid #999;
-      padding: 0.6rem;
+      padding: 0.8rem;
       text-align: center;
+      min-width: 100px;
     }
     th { 
       background: #e3f2fd; 
-      font-weight: 600;
       position: sticky;
       top: 0;
       z-index: 10;
     }
     .uczniowie-col { 
       background: #c8e6c9; 
-      width: 220px; 
-      font-weight: bold;
+      width: 240px; 
       text-align: left;
-      padding-left: 12px;
+      padding-left: 15px;
+      font-weight: bold;
     }
-    .obecny { background: #e8f5e9; }
     nav {
       margin: 1.5rem 0;
       padding: 1rem;
@@ -68,7 +67,7 @@
     }
     .arkusz-item {
       border: 1px solid #ddd;
-      padding: 1rem;
+      padding: 1.2rem;
       margin: 1rem 0;
       border-radius: 8px;
       background: white;
@@ -78,11 +77,10 @@
     }
   </style>
 
-  <!-- Firebase -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-    import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, Timestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, Timestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyACzVKOmFK87VJJvBGCW921yrxbpKgYEKU",
@@ -106,7 +104,6 @@
     const show = el => el?.classList.remove("hidden");
     const hide = el => el?.classList.add("hidden");
 
-    // Sprawdzenie admina
     function isAdmin(email) {
       return ADMINS.includes(email);
     }
@@ -120,26 +117,26 @@
       }
 
       try {
-        const docRef = await addDoc(collection(db, "arkusze_ocen"), {
+        await addDoc(collection(db, "arkusze_ocen"), {
           nazwa,
           createdBy: currentUserEmail,
           createdAt: Timestamp.now(),
           uczniowie: [],
-          kolumny: []        // daty zadań
+          kolumny: []
         });
 
-        alert("Arkusz ocen został utworzony!");
+        alert("Arkusz utworzony pomyślnie!");
         hide($("form-arkusz"));
         loadArkusze();
       } catch (err) {
-        alert("Błąd tworzenia arkusza: " + err.message);
+        alert("Błąd: " + err.message);
       }
     }
 
     // Ładowanie listy arkuszy
     async function loadArkusze() {
       const container = $("arkusze-list");
-      container.innerHTML = "<p>Ładowanie arkuszy...</p>";
+      container.innerHTML = "<p>Ładowanie...</p>";
 
       try {
         const q = query(collection(db, "arkusze_ocen"), orderBy("createdAt", "desc"));
@@ -147,7 +144,7 @@
         container.innerHTML = "";
 
         if (snap.empty) {
-          container.innerHTML = "<p>Nie ma jeszcze żadnych arkuszy ocen.</p>";
+          container.innerHTML = "<p>Brak arkuszy ocen.</p>";
           return;
         }
 
@@ -164,10 +161,10 @@
             </div>
           `;
 
-          const openBtn = document.createElement("button");
-          openBtn.textContent = "Otwórz arkusz";
-          openBtn.onclick = () => openArkusz(id, d);
-          div.appendChild(openBtn);
+          const btn = document.createElement("button");
+          btn.textContent = "Otwórz arkusz";
+          btn.onclick = () => openArkusz(id, d);
+          div.appendChild(btn);
 
           container.appendChild(div);
         });
@@ -176,34 +173,29 @@
       }
     }
 
-    // Otwieranie arkusza do wypełniania
-    async function openArkusz(id, data) {
+    // Otwieranie arkusza do edycji
+    function openArkusz(id, data) {
       currentArkuszId = id;
       hide($("arkusze-list"));
       show($("arkusz-form"));
-
       $("arkusz-tytul").textContent = data.nazwa;
 
-      // Wypełnianie uczniów
       const tbody = $("oceny-table").querySelector("tbody");
       tbody.innerHTML = "";
 
+      // Dodaj uczniów
       if (data.uczniowie && data.uczniowie.length > 0) {
-        data.uczniowie.forEach(uczen => addUczienRow(uczen));
+        data.uczniowie.forEach(name => addUczienRow(name));
       } else {
         addUczienRow("");
       }
 
-      // Wypełnianie kolumn (dat)
+      // Dodaj kolumny
       const headerRow = $("oceny-table").querySelector("thead tr");
       headerRow.innerHTML = '<th class="uczniowie-col">Uczeń</th>';
 
       if (data.kolumny && data.kolumny.length > 0) {
-        data.kolumny.forEach((dataZadania, index) => {
-          const th = document.createElement("th");
-          th.innerHTML = `${dataZadania}<br><button class="red" onclick="usunKolumne(${index})" style="font-size:0.7rem;">×</button>`;
-          headerRow.appendChild(th);
-        });
+        data.kolumny.forEach(kol => addKolumnaZData(kol));
       }
     }
 
@@ -217,22 +209,25 @@
       tbody.appendChild(tr);
     }
 
-    // Dodawanie kolumny (daty zadania)
+    // Dodawanie nowej kolumny (data zadania)
     function addKolumna() {
       const dataZadania = prompt("Podaj datę zadania (np. 2026-04-20):");
       if (!dataZadania) return;
+      addKolumnaZData(dataZadania);
+    }
 
+    function addKolumnaZData(dataZadania) {
       const headerRow = $("oceny-table").querySelector("thead tr");
       const th = document.createElement("th");
-      th.innerHTML = `${dataZadania}<br><button class="red" onclick="this.parentElement.remove()" style="font-size:0.7rem;">×</button>`;
+      th.innerHTML = `${dataZadania}<br><button onclick="this.parentElement.remove()" class="red" style="font-size:0.75rem; padding:2px 6px;">×</button>`;
       headerRow.appendChild(th);
 
-      // Dodaj komórki do każdego wiersza
+      // Dodaj komórki do każdego wiersza ucznia
       document.querySelectorAll("#oceny-table tbody tr").forEach(row => {
         const td = document.createElement("td");
         td.innerHTML = `
           <input type="checkbox" title="Obecny"> 
-          <input type="number" placeholder="Punkty" style="width:60px; margin-left:8px;">
+          <input type="number" placeholder="Punkty" style="width:70px; margin-left:8px;" min="0">
         `;
         row.appendChild(td);
       });
@@ -242,11 +237,9 @@
     async function saveArkusz() {
       if (!currentArkuszId) return;
 
-      const uczniowie = [];
-      document.querySelectorAll("#oceny-table tbody tr").forEach(row => {
-        const input = row.querySelector(".uczen-input");
-        if (input && input.value.trim()) uczniowie.push(input.value.trim());
-      });
+      const uczniowie = Array.from(document.querySelectorAll(".uczen-input"))
+                             .map(input => input.value.trim())
+                             .filter(name => name);
 
       const kolumny = [];
       document.querySelectorAll("#oceny-table thead th:not(.uczniowie-col)").forEach(th => {
@@ -278,7 +271,7 @@
       currentUserEmail = user.email;
 
       if (!isAdmin(user.email)) {
-        document.body.innerHTML = `<div style="text-align:center;padding:5rem;"><h2>Brak dostępu</h2><p>Tylko administratorzy mają dostęp do arkuszy ocen.</p><a href="index.html">← Powrót</a></div>`;
+        document.body.innerHTML = `<div style="text-align:center; padding:5rem;"><h2>Brak dostępu</h2><p>Tylko administratorzy mają dostęp.</p><a href="index.html">← Powrót</a></div>`;
         return;
       }
 
@@ -318,7 +311,7 @@
 
     <button id="btn-nowy-arkusz" style="margin:1.5rem 0;">Nowy arkusz ocen</button>
 
-    <!-- Formularz tworzenia arkusza -->
+    <!-- Tworzenie nowego arkusza -->
     <div id="form-arkusz" class="hidden" style="background:white; padding:2rem; border-radius:8px; border:1px solid #ddd;">
       <h2>Nowy arkusz ocen</h2>
       <input id="arkusz-nazwa" placeholder="Nazwa arkusza (np. JavaScript - Grupa 11)" style="width:100%; font-size:1.1rem;">
@@ -328,13 +321,16 @@
       </div>
     </div>
 
-    <!-- Główny arkusz do wypełniania -->
+    <!-- Edycja arkusza -->
     <div id="arkusz-form" class="hidden">
       <h2 id="arkusz-tytul"></h2>
-      <button onclick="addUczienRow('')">+ Dodaj ucznia</button>
-      <button onclick="addKolumna()">+ Dodaj zadanie / datę</button>
-      <button onclick="saveArkusz()" style="background:#2e7d32;">Zapisz arkusz</button>
-      <button onclick="hide($('arkusz-form')); show($('arkusze-list'))" style="background:#757575;">Powrót do listy</button>
+
+      <div style="margin:1rem 0;">
+        <button onclick="addUczienRow('')">+ Dodaj ucznia</button>
+        <button onclick="addKolumna()">+ Dodaj zadanie / datę</button>
+        <button onclick="saveArkusz()" style="background:#2e7d32;">Zapisz arkusz</button>
+        <button onclick="hide($('arkusz-form')); show($('arkusze-list'))" style="background:#757575;">Powrót do listy</button>
+      </div>
 
       <table id="oceny-table">
         <thead>
@@ -347,9 +343,7 @@
     </div>
 
     <!-- Lista arkuszy -->
-    <div id="arkusze-list">
-      <h2>Lista arkuszy ocen</h2>
-    </div>
+    <div id="arkusze-list"></div>
   </div>
 
 </body>
