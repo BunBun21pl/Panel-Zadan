@@ -3,22 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Oceny – 3tla.local</title>
+  <title>Arkusze ocen – 3tla.local</title>
   <style>
     body {
       font-family: system-ui, sans-serif;
-      max-width: 900px;
+      max-width: 1300px;
       margin: 2rem auto;
       padding: 0 1rem;
       background: #f9f9f9;
     }
     .hidden { display: none; }
-    input, textarea, select, button {
-      display: block;
-      width: 100%;
-      margin: 0.8rem 0;
+    input, button, select {
       padding: 0.7rem;
-      box-sizing: border-box;
+      margin: 0.5rem 0;
       font-size: 1rem;
     }
     button {
@@ -29,20 +26,23 @@
       cursor: pointer;
     }
     button:hover { background: #0055aa; }
-    button.logout {
-      background: #c00;
-    }
-    .evaluation {
-      border: 1px solid #ddd;
-      padding: 1rem;
-      margin: 1rem 0;
-      border-radius: 6px;
+    button.red { background: #c00; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
       background: white;
     }
-    .error { color: #c00; min-height: 1.2rem; }
+    th, td {
+      border: 1px solid #aaa;
+      padding: 0.8rem;
+      text-align: center;
+    }
+    th { background: #e3f2fd; font-weight: 600; }
+    .uczniowie-header { background: #c8e6c9; width: 220px; }
     nav {
       margin: 1.5rem 0;
-      padding: 0.8rem;
+      padding: 1rem;
       background: #f0f0f0;
       border-radius: 8px;
     }
@@ -52,19 +52,23 @@
       text-decoration: none;
       font-weight: 500;
     }
-    nav a:hover { text-decoration: underline; }
-    .no-access {
-      text-align: center;
-      padding: 3rem 1rem;
-      color: #555;
+    .arkusz-item {
+      border: 1px solid #ddd;
+      padding: 1rem;
+      margin: 1rem 0;
+      border-radius: 8px;
+      background: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
   </style>
 
-  <!-- Firebase SDK -->
+  <!-- Firebase -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-    import { getFirestore, collection, addDoc, getDocs, Timestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, Timestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyACzVKOmFK87VJJvBGCW921yrxbpKgYEKU",
@@ -72,114 +76,128 @@
       projectId: "iiitla-zadania",
       storageBucket: "iiitla-zadania.firebasestorage.app",
       messagingSenderId: "753248383455",
-      appId: "1:753248383455:web:f39ab717514c979913146a",
-      measurementId: "G-9DQCJ8T5QQ"
+      appId: "1:753248383455:web:f39ab717514c979913146a"
     };
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    const ADMINS = [
-      "mbecela@3tla.local",
-      "nnoczynska@3tla.local"
-    ];
+    const ADMINS = ["mbecela@3tla.local", "nnoczynska@3tla.local"];
 
-    // ──── Helpers ────────────────────────────────────────
+    let currentUserEmail = "";
+    let currentArkuszId = null;
+
     const $ = id => document.getElementById(id);
     const show = el => el?.classList.remove("hidden");
     const hide = el => el?.classList.add("hidden");
 
-    // ──── Dodawanie oceny ────────────────────────────────
-    async function addEvaluation() {
-      const userEmail = $("eval-user").value.trim();
-      const description = $("eval-desc").value.trim();
-      const errorEl = $("add-error");
+    // Sprawdzenie czy admin
+    function isAdmin(email) {
+      return ADMINS.includes(email);
+    }
 
-      if (!userEmail) {
-        errorEl.textContent = "Wybierz użytkownika";
-        return;
-      }
-      if (!description) {
-        errorEl.textContent = "Wpisz treść oceny";
+    // Tworzenie nowego arkusza ocen
+    async function createArkusz() {
+      const nazwa = $("arkusz-nazwa").value.trim();
+      if (!nazwa) {
+        alert("Podaj nazwę arkusza ocen!");
         return;
       }
 
       try {
-        await addDoc(collection(db, "evaluations"), {
-          userEmail,
-          description,
+        const docRef = await addDoc(collection(db, "arkusze_ocen"), {
+          nazwa,
+          createdBy: currentUserEmail,
           createdAt: Timestamp.now(),
-          createdBy: auth.currentUser.email
+          uczniowie: [],
+          kolumny: []   // daty zadań
         });
 
-        $("eval-desc").value = "";
-        errorEl.textContent = "";
-        alert("Ocena dodana");
-        loadEvaluations();
+        alert("Arkusz ocen został utworzony!");
+        hide($("form-arkusz"));
+        loadArkusze();
       } catch (err) {
-        errorEl.textContent = "Błąd: " + err.message;
-        console.error(err);
+        alert("Błąd: " + err.message);
       }
     }
 
-    // ──── Ładowanie listy ocen ───────────────────────────
-    async function loadEvaluations() {
-      const container = $("evaluations-list");
-      container.innerHTML = "<p>Ładowanie ocen...</p>";
+    // Ładowanie listy arkuszy
+    async function loadArkusze() {
+      const container = $("arkusze-list");
+      container.innerHTML = "<p>Ładowanie...</p>";
 
       try {
-        const q = query(collection(db, "evaluations"), orderBy("createdAt", "desc"));
-        const querySnapshot = await getDocs(q);
-
+        const q = query(collection(db, "arkusze_ocen"), orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
         container.innerHTML = "";
 
-        if (querySnapshot.empty) {
-          container.innerHTML = "<p>Nie ma jeszcze żadnych ocen.</p>";
+        if (snap.empty) {
+          container.innerHTML = "<p>Nie ma jeszcze żadnych arkuszy ocen.</p>";
           return;
         }
 
-        querySnapshot.forEach(docSnap => {
-          const data = docSnap.data();
-          const date = data.createdAt.toDate().toLocaleString("pl-PL");
+        snap.forEach(docSnap => {
+          const d = docSnap.data();
+          const id = docSnap.id;
+
           const div = document.createElement("div");
-          div.className = "evaluation";
+          div.className = "arkusz-item";
           div.innerHTML = `
-            <strong>${data.userEmail}</strong>
-            <small style="color:#666; float:right;">${date}</small>
-            <p style="margin:0.8rem 0; white-space: pre-wrap;">${data.description}</p>
-            <small style="color:#888;">Dodano przez: ${data.createdBy}</small>
+            <div>
+              <strong>${d.nazwa}</strong><br>
+              <small>Utworzony: ${d.createdAt.toDate().toLocaleDateString('pl-PL')}</small>
+            </div>
           `;
+
+          const openBtn = document.createElement("button");
+          openBtn.textContent = "Otwórz arkusz";
+          openBtn.onclick = () => openArkusz(id);
+          div.appendChild(openBtn);
+
           container.appendChild(div);
         });
       } catch (err) {
-        container.innerHTML = `<p class="error">Nie udało się wczytać ocen: ${err.message}</p>`;
+        container.innerHTML = `<p style="color:#c00">Błąd: ${err.message}</p>`;
       }
     }
 
-    // ──── Sprawdzanie uprawnień i ładowanie po zalogowaniu ──
+    // Otwieranie arkusza (do wypełniania)
+    async function openArkusz(id) {
+      currentArkuszId = id;
+      // Tu będzie rozwinięta logika w kolejnej wersji
+      alert("Funkcja otwierania arkusza w trakcie przygotowania.\n\nNa razie możesz tylko tworzyć nowe arkusze.");
+    }
+
     onAuthStateChanged(auth, user => {
       if (!user) {
-        // Niezalogowany → przekierowanie na index.html
         window.location.href = "index.html";
         return;
       }
 
-      hide($("loading"));
-      
-      if (ADMINS.includes(user.email)) {
-        show($("admin-content"));
-        $("current-user").textContent = user.email;
-        loadEvaluations();
-      } else {
-        show($("no-permission"));
+      currentUserEmail = user.email;
+
+      if (!isAdmin(user.email)) {
+        document.body.innerHTML = `
+          <div style="text-align:center; padding:4rem;">
+            <h2>Brak dostępu</h2>
+            <p>Ta strona jest dostępna tylko dla administratorów.</p>
+            <a href="index.html">← Powrót do strony głównej</a>
+          </div>`;
+        return;
       }
+
+      hide($("loading"));
+      show($("content"));
+      $("current-user").textContent = user.email;
+      loadArkusze();
     });
 
-    // ──── Eventy ─────────────────────────────────────────
     document.addEventListener("DOMContentLoaded", () => {
-      $("btn-add-eval")?.addEventListener("click", addEvaluation);
       $("btn-logout")?.addEventListener("click", () => signOut(auth));
+      $("btn-nowy-arkusz")?.addEventListener("click", () => show($("form-arkusz")));
+      $("btn-anuluj")?.addEventListener("click", () => hide($("form-arkusz")));
+      $("btn-zapisz-arkusz")?.addEventListener("click", createArkusz);
     });
   </script>
 </head>
@@ -189,52 +207,34 @@
     <h2>Trwa sprawdzanie uprawnień...</h2>
   </div>
 
-  <div id="no-permission" class="hidden no-access">
-    <h2>Brak dostępu</h2>
-    <p>Ta strona jest dostępna wyłącznie dla administratora.</p>
-    <p><a href="index.html">← Powrót do strony głównej</a></p>
-  </div>
-
-  <div id="admin-content" class="hidden">
+  <div id="content" class="hidden">
     <nav>
-      <a href="index.html">← Strona główna / Zadania</a>
+      <a href="index.html">← Strona główna</a>
       <a href="dokumenty.html">Faktury</a>
       <a href="produkcja.html">Produkcja</a>
+      <a href="harmonogram.html">Harmonogram</a>
       <a href="https://zspsycow-3tla-gr11.odoo.com" target="_blank">WMS</a>
     </nav>
 
-    <h1>Panel ocen</h1>
+    <h1>Arkusze ocen</h1>
     <p>Zalogowany jako: <strong id="current-user"></strong></p>
     <button id="btn-logout" class="logout">Wyloguj się</button>
 
-    <h2>Dodaj nową ocenę</h2>
-    <select id="eval-user" required>
-      <option value="">— wybierz użytkownika —</option>
-      <option value="mbecela@3tla.local">mbecela@3tla.local</option>
-      <option value="wbzowski@3tla.local">wbzowski@3tla.local</option>
-      <option value="mchwałek@3tla.local">mchwałek@3tla.local</option>
-      <option value="sciemny@3tla.local">sciemny@3tla.local</option>
-      <option value="sgawlikowski@3tla.local">sgawlikowski@3tla.local</option>
-      <option value="wgawlowska@3tla.local">wgawlowska@3tla.local</option>
-      <option value="mkolodziej@3tla.local">mkolodziej@3tla.local</option>
-      <option value="gkrzemińska@3tla.local">gkrzemińska@3tla.local</option>
-      <option value="okurpik@3tla.local">okurpik@3tla.local</option>
-      <option value="llipińska@3tla.local">llipińska@3tla.local</option>
-      <option value="mrak@3tla.local">mrak@3tla.local</option>
-      <option value="irzemyk@3tla.local">irzemyk@3tla.local</option>
-      <option value="frzęsa@3tla.local">frzęsa@3tla.local</option>
-      <option value="ssiudy@3tla.local">ssiudy@3tla.local</option>
-      <option value="nsuska@3tla.local">nsuska@3tla.local</option>
-      <!-- dodaj tutaj więcej użytkowników ręcznie -->
-    </select>
+    <button id="btn-nowy-arkusz" style="margin:1.5rem 0;">Nowy arkusz ocen</button>
 
-    <textarea id="eval-desc" rows="6" placeholder="Opisz co zostało zrobione dobrze, co wymaga poprawy..." required></textarea>
+    <!-- Formularz tworzenia arkusza -->
+    <div id="form-arkusz" class="hidden" style="background:white; padding:1.5rem; border-radius:8px; border:1px solid #ddd;">
+      <h2>Nowy arkusz ocen</h2>
+      <input id="arkusz-nazwa" placeholder="Nazwa arkusza (np. Programowanie - Grupa 11)" style="width:100%;">
 
-    <button id="btn-add-eval">Dodaj ocenę</button>
-    <div id="add-error" class="error"></div>
+      <div style="margin-top:1.5rem;">
+        <button id="btn-zapisz-arkusz">Utwórz arkusz</button>
+        <button id="btn-anuluj" style="background:#757575; margin-left:1rem;">Anuluj</button>
+      </div>
+    </div>
 
-    <h2>Dotychczasowe oceny</h2>
-    <div id="evaluations-list"></div>
+    <h2>Lista arkuszy ocen</h2>
+    <div id="arkusze-list"></div>
   </div>
 
 </body>
