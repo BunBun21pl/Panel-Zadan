@@ -46,6 +46,7 @@
     let currentUserEmail = "";
     let currentArkuszId = null;
 
+    // Helpers
     const $ = id => document.getElementById(id);
     const show = el => el?.classList.remove("hidden");
     const hide = el => el?.classList.add("hidden");
@@ -63,7 +64,7 @@
       }
 
       try {
-        const docRef = await addDoc(collection(db, "arkusze_ocen"), {
+        await addDoc(collection(db, "arkusze_ocen"), {
           nazwa,
           createdBy: currentUserEmail,
           createdAt: Timestamp.now(),
@@ -79,7 +80,7 @@
       }
     }
 
-    // Ładowanie listy
+    // Ładowanie listy arkuszy
     async function loadArkusze() {
       const container = $("arkusze-list");
       container.innerHTML = "<p>Ładowanie...</p>";
@@ -90,7 +91,7 @@
         container.innerHTML = "";
 
         if (snap.empty) {
-          container.innerHTML = "<p>Brak arkuszy.</p>";
+          container.innerHTML = "<p>Brak arkuszy ocen.</p>";
           return;
         }
 
@@ -125,14 +126,12 @@
       const tbody = $("oceny-table").querySelector("tbody");
       tbody.innerHTML = "";
 
-      // Uczniowie
       if (data.uczniowie && data.uczniowie.length > 0) {
         data.uczniowie.forEach(name => addUczienRow(name));
       } else {
         addUczienRow("");
       }
 
-      // Kolumny
       const headerRow = $("oceny-table").querySelector("thead tr");
       headerRow.innerHTML = '<th class="uczniowie-col">Uczeń</th>';
 
@@ -141,10 +140,11 @@
       }
     }
 
+    // Globalne funkcje
     window.addUczienRow = function(imie = "") {
       const tbody = $("oceny-table").querySelector("tbody");
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td><input type="text" class="uczen-input" value="${imie}" placeholder="Imię i nazwisko"></td>`;
+      tr.innerHTML = `<td><input type="text" class="uczen-input" value="${imie}" placeholder="Imię i nazwisko ucznia"></td>`;
       tbody.appendChild(tr);
     };
 
@@ -171,9 +171,9 @@
     }
 
     // Zapisywanie arkusza
-    async function saveArkusz() {
+    window.saveArkusz = async function() {
       if (!currentArkuszId) {
-        alert("Nie wybrano arkusza do zapisu!");
+        alert("Nie wybrano arkusza!");
         return;
       }
 
@@ -188,8 +188,8 @@
 
       try {
         await updateDoc(doc(db, "arkusze_ocen", currentArkuszId), {
-          uczniowie: uczniowie,
-          kolumny: kolumny,
+          uczniowie,
+          kolumny,
           lastModified: Timestamp.now()
         });
 
@@ -198,10 +198,10 @@
         show($("arkusze-list"));
         loadArkusze();
       } catch (err) {
-        alert("Błąd zapisu arkusza:\n" + err.message);
+        alert("Błąd zapisu:\n" + err.message);
         console.error(err);
       }
-    }
+    };
 
     onAuthStateChanged(auth, user => {
       if (!user) { window.location.href = "index.html"; return; }
@@ -226,7 +226,6 @@
       $("btn-zapisz-arkusz")?.addEventListener("click", createArkusz);
       $("btn-dodaj-ucznia")?.addEventListener("click", () => addUczienRow(""));
       $("btn-dodaj-kolumne")?.addEventListener("click", addKolumna);
-      $("btn-zapisz-arkusz-dane")?.addEventListener("click", saveArkusz);
     });
   </script>
 </head>
