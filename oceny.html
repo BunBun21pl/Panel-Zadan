@@ -5,16 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Arkusze ocen – 3tla.local</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 1400px; margin: 2rem auto; padding: 0 1rem; background: #f9f9f9; }
+    body { font-family: system-ui, sans-serif; max-width: 1450px; margin: 2rem auto; padding: 0 1rem; background: #f9f9f9; }
     .hidden { display: none; }
     input, button { padding: 0.7rem; margin: 0.4rem 0; font-size: 1rem; }
     button { background: #0066cc; color: white; border: none; border-radius: 6px; cursor: pointer; }
     button:hover { background: #0055aa; }
     button.red { background: #c00; }
     table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; background: white; }
-    th, td { border: 1px solid #999; padding: 0.8rem; text-align: center; }
+    th, td { border: 1px solid #999; padding: 0.8rem; text-align: center; vertical-align: middle; }
     th { background: #e3f2fd; position: sticky; top: 0; z-index: 10; }
-    .uczniowie-col { background: #c8e6c9; width: 240px; text-align: left; padding-left: 15px; font-weight: bold; }
+    .uczniowie-col { background: #c8e6c9; width: 220px; text-align: left; padding-left: 12px; font-weight: bold; }
+    .uwagi-col { width: 180px; }
     nav { margin: 1.5rem 0; padding: 1rem; background: #f0f0f0; border-radius: 8px; }
     nav a { margin-right: 1.5rem; color: #0066cc; text-decoration: none; font-weight: 500; }
     .arkusz-item {
@@ -22,6 +23,10 @@
       display: flex; justify-content: space-between; align-items: center;
     }
   </style>
+
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
@@ -46,7 +51,6 @@
     let currentUserEmail = "";
     let currentArkuszId = null;
 
-    // Helpers
     const $ = id => document.getElementById(id);
     const show = el => el?.classList.remove("hidden");
     const hide = el => el?.classList.add("hidden");
@@ -59,7 +63,7 @@
     async function createArkusz() {
       const nazwa = $("arkusz-nazwa").value.trim();
       if (!nazwa) {
-        alert("Podaj nazwę arkusza!");
+        alert("Podaj nazwę arkusza ocen!");
         return;
       }
 
@@ -76,7 +80,7 @@
         hide($("form-arkusz"));
         loadArkusze();
       } catch (err) {
-        alert("Błąd tworzenia: " + err.message);
+        alert("Błąd: " + err.message);
       }
     }
 
@@ -126,12 +130,14 @@
       const tbody = $("oceny-table").querySelector("tbody");
       tbody.innerHTML = "";
 
+      // Uczniowie
       if (data.uczniowie && data.uczniowie.length > 0) {
         data.uczniowie.forEach(name => addUczienRow(name));
       } else {
         addUczienRow("");
       }
 
+      // Kolumny
       const headerRow = $("oceny-table").querySelector("thead tr");
       headerRow.innerHTML = '<th class="uczniowie-col">Uczeń</th>';
 
@@ -140,14 +146,17 @@
       }
     }
 
-    // Globalne funkcje
+    // Dodawanie ucznia
     window.addUczienRow = function(imie = "") {
       const tbody = $("oceny-table").querySelector("tbody");
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td><input type="text" class="uczen-input" value="${imie}" placeholder="Imię i nazwisko ucznia"></td>`;
+      tr.innerHTML = `
+        <td><input type="text" class="uczen-input" value="${imie}" placeholder="Imię i nazwisko ucznia"></td>
+      `;
       tbody.appendChild(tr);
     };
 
+    // Dodawanie kolumny (data zadania)
     window.addKolumna = function() {
       const dataZadania = prompt("Podaj datę zadania (np. 2026-04-20):");
       if (!dataZadania) return;
@@ -164,7 +173,8 @@
         const td = document.createElement("td");
         td.innerHTML = `
           <input type="checkbox" title="Obecny"> 
-          <input type="number" placeholder="Punkty" style="width:70px; margin-left:8px;" min="0">
+          <input type="number" placeholder="Punkty" style="width:65px; margin:0 5px;" min="0">
+          <input type="text" placeholder="Uwagi" style="width:120px; margin-left:5px;">
         `;
         row.appendChild(td);
       });
@@ -198,9 +208,51 @@
         show($("arkusze-list"));
         loadArkusze();
       } catch (err) {
-        alert("Błąd zapisu:\n" + err.message);
+        alert("Błąd zapisu: " + err.message);
         console.error(err);
       }
+    };
+
+    // Eksport do PDF
+    window.exportToPDF = function() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      doc.setFont("times", "bold");
+      doc.setFontSize(16);
+      doc.text($("arkusz-tytul").textContent, 105, 15, { align: "center" });
+
+      const headers = ["Uczeń"];
+      document.querySelectorAll("#oceny-table thead th:not(.uczniowie-col)").forEach(th => {
+        headers.push(th.textContent.trim().split('\n')[0]);
+      });
+
+      const body = [];
+      document.querySelectorAll("#oceny-table tbody tr").forEach(row => {
+        const rowData = [row.querySelector(".uczen-input").value || "—"];
+        row.querySelectorAll("td:not(:first-child)").forEach(td => {
+          const checkbox = td.querySelector("input[type='checkbox']");
+          const punkty = td.querySelector("input[type='number']");
+          const uwagi = td.querySelector("input[type='text']");
+          let text = "";
+          if (checkbox && checkbox.checked) text += "✓ ";
+          if (punkty) text += punkty.value + " pkt ";
+          if (uwagi && uwagi.value) text += uwagi.value;
+          rowData.push(text.trim() || "-");
+        });
+        body.push(rowData);
+      });
+
+      doc.autoTable({
+        startY: 30,
+        head: [headers],
+        body: body,
+        theme: 'grid',
+        styles: { font: "times", fontSize: 10 },
+        headStyles: { fillColor: [66, 139, 202] }
+      });
+
+      doc.save(`Arkusz_${$("arkusz-tytul").textContent.replace(/ /g, '_')}.pdf`);
     };
 
     onAuthStateChanged(auth, user => {
@@ -226,6 +278,7 @@
       $("btn-zapisz-arkusz")?.addEventListener("click", createArkusz);
       $("btn-dodaj-ucznia")?.addEventListener("click", () => addUczienRow(""));
       $("btn-dodaj-kolumne")?.addEventListener("click", addKolumna);
+      $("btn-export-pdf")?.addEventListener("click", exportToPDF);
     });
   </script>
 </head>
@@ -264,6 +317,7 @@
         <button id="btn-dodaj-ucznia">+ Dodaj ucznia</button>
         <button id="btn-dodaj-kolumne">+ Dodaj zadanie / datę</button>
         <button onclick="saveArkusz()" style="background:#2e7d32;">Zapisz arkusz</button>
+        <button onclick="exportToPDF()" style="background:#388e3c;">Pobierz PDF</button>
         <button onclick="hide($('arkusz-form')); show($('arkusze-list'))" style="background:#757575;">Powrót do listy</button>
       </div>
 
