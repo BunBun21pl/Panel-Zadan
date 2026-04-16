@@ -7,7 +7,7 @@
   <style>
     body {
       font-family: system-ui, sans-serif;
-      max-width: 1300px;
+      max-width: 1400px;
       margin: 2rem auto;
       padding: 0 1rem;
       background: #f9f9f9;
@@ -15,7 +15,7 @@
     .hidden { display: none; }
     input, button, select {
       padding: 0.7rem;
-      margin: 0.5rem 0;
+      margin: 0.4rem 0;
       font-size: 1rem;
     }
     button {
@@ -32,14 +32,28 @@
       border-collapse: collapse;
       margin: 1.5rem 0;
       background: white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     th, td {
-      border: 1px solid #aaa;
-      padding: 0.8rem;
+      border: 1px solid #999;
+      padding: 0.6rem;
       text-align: center;
     }
-    th { background: #e3f2fd; font-weight: 600; }
-    .uczniowie-header { background: #c8e6c9; width: 220px; }
+    th { 
+      background: #e3f2fd; 
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .uczniowie-col { 
+      background: #c8e6c9; 
+      width: 220px; 
+      font-weight: bold;
+      text-align: left;
+      padding-left: 12px;
+    }
+    .obecny { background: #e8f5e9; }
     nav {
       margin: 1.5rem 0;
       padding: 1rem;
@@ -92,12 +106,12 @@
     const show = el => el?.classList.remove("hidden");
     const hide = el => el?.classList.add("hidden");
 
-    // Sprawdzenie czy admin
+    // Sprawdzenie admina
     function isAdmin(email) {
       return ADMINS.includes(email);
     }
 
-    // Tworzenie nowego arkusza ocen
+    // Tworzenie nowego arkusza
     async function createArkusz() {
       const nazwa = $("arkusz-nazwa").value.trim();
       if (!nazwa) {
@@ -111,21 +125,21 @@
           createdBy: currentUserEmail,
           createdAt: Timestamp.now(),
           uczniowie: [],
-          kolumny: []   // daty zadań
+          kolumny: []        // daty zadań
         });
 
         alert("Arkusz ocen został utworzony!");
         hide($("form-arkusz"));
         loadArkusze();
       } catch (err) {
-        alert("Błąd: " + err.message);
+        alert("Błąd tworzenia arkusza: " + err.message);
       }
     }
 
     // Ładowanie listy arkuszy
     async function loadArkusze() {
       const container = $("arkusze-list");
-      container.innerHTML = "<p>Ładowanie...</p>";
+      container.innerHTML = "<p>Ładowanie arkuszy...</p>";
 
       try {
         const q = query(collection(db, "arkusze_ocen"), orderBy("createdAt", "desc"));
@@ -152,7 +166,7 @@
 
           const openBtn = document.createElement("button");
           openBtn.textContent = "Otwórz arkusz";
-          openBtn.onclick = () => openArkusz(id);
+          openBtn.onclick = () => openArkusz(id, d);
           div.appendChild(openBtn);
 
           container.appendChild(div);
@@ -162,11 +176,97 @@
       }
     }
 
-    // Otwieranie arkusza (do wypełniania)
-    async function openArkusz(id) {
+    // Otwieranie arkusza do wypełniania
+    async function openArkusz(id, data) {
       currentArkuszId = id;
-      // Tu będzie rozwinięta logika w kolejnej wersji
-      alert("Funkcja otwierania arkusza w trakcie przygotowania.\n\nNa razie możesz tylko tworzyć nowe arkusze.");
+      hide($("arkusze-list"));
+      show($("arkusz-form"));
+
+      $("arkusz-tytul").textContent = data.nazwa;
+
+      // Wypełnianie uczniów
+      const tbody = $("oceny-table").querySelector("tbody");
+      tbody.innerHTML = "";
+
+      if (data.uczniowie && data.uczniowie.length > 0) {
+        data.uczniowie.forEach(uczen => addUczienRow(uczen));
+      } else {
+        addUczienRow("");
+      }
+
+      // Wypełnianie kolumn (dat)
+      const headerRow = $("oceny-table").querySelector("thead tr");
+      headerRow.innerHTML = '<th class="uczniowie-col">Uczeń</th>';
+
+      if (data.kolumny && data.kolumny.length > 0) {
+        data.kolumny.forEach((dataZadania, index) => {
+          const th = document.createElement("th");
+          th.innerHTML = `${dataZadania}<br><button class="red" onclick="usunKolumne(${index})" style="font-size:0.7rem;">×</button>`;
+          headerRow.appendChild(th);
+        });
+      }
+    }
+
+    // Dodawanie wiersza ucznia
+    function addUczienRow(imie = "") {
+      const tbody = $("oceny-table").querySelector("tbody");
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><input type="text" class="uczen-input" value="${imie}" placeholder="Imię i nazwisko ucznia"></td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    // Dodawanie kolumny (daty zadania)
+    function addKolumna() {
+      const dataZadania = prompt("Podaj datę zadania (np. 2026-04-20):");
+      if (!dataZadania) return;
+
+      const headerRow = $("oceny-table").querySelector("thead tr");
+      const th = document.createElement("th");
+      th.innerHTML = `${dataZadania}<br><button class="red" onclick="this.parentElement.remove()" style="font-size:0.7rem;">×</button>`;
+      headerRow.appendChild(th);
+
+      // Dodaj komórki do każdego wiersza
+      document.querySelectorAll("#oceny-table tbody tr").forEach(row => {
+        const td = document.createElement("td");
+        td.innerHTML = `
+          <input type="checkbox" title="Obecny"> 
+          <input type="number" placeholder="Punkty" style="width:60px; margin-left:8px;">
+        `;
+        row.appendChild(td);
+      });
+    }
+
+    // Zapisywanie arkusza
+    async function saveArkusz() {
+      if (!currentArkuszId) return;
+
+      const uczniowie = [];
+      document.querySelectorAll("#oceny-table tbody tr").forEach(row => {
+        const input = row.querySelector(".uczen-input");
+        if (input && input.value.trim()) uczniowie.push(input.value.trim());
+      });
+
+      const kolumny = [];
+      document.querySelectorAll("#oceny-table thead th:not(.uczniowie-col)").forEach(th => {
+        kolumny.push(th.textContent.trim().split('\n')[0]);
+      });
+
+      try {
+        await updateDoc(doc(db, "arkusze_ocen", currentArkuszId), {
+          uczniowie,
+          kolumny,
+          lastModified: Timestamp.now()
+        });
+
+        alert("Arkusz ocen został zapisany!");
+        hide($("arkusz-form"));
+        show($("arkusze-list"));
+        loadArkusze();
+      } catch (err) {
+        alert("Błąd zapisu: " + err.message);
+      }
     }
 
     onAuthStateChanged(auth, user => {
@@ -178,12 +278,7 @@
       currentUserEmail = user.email;
 
       if (!isAdmin(user.email)) {
-        document.body.innerHTML = `
-          <div style="text-align:center; padding:4rem;">
-            <h2>Brak dostępu</h2>
-            <p>Ta strona jest dostępna tylko dla administratorów.</p>
-            <a href="index.html">← Powrót do strony głównej</a>
-          </div>`;
+        document.body.innerHTML = `<div style="text-align:center;padding:5rem;"><h2>Brak dostępu</h2><p>Tylko administratorzy mają dostęp do arkuszy ocen.</p><a href="index.html">← Powrót</a></div>`;
         return;
       }
 
@@ -198,14 +293,15 @@
       $("btn-nowy-arkusz")?.addEventListener("click", () => show($("form-arkusz")));
       $("btn-anuluj")?.addEventListener("click", () => hide($("form-arkusz")));
       $("btn-zapisz-arkusz")?.addEventListener("click", createArkusz);
+      $("btn-dodaj-ucznia")?.addEventListener("click", () => addUczienRow(""));
+      $("btn-dodaj-kolumne")?.addEventListener("click", addKolumna);
+      $("btn-zapisz-arkusz-dane")?.addEventListener("click", saveArkusz);
     });
   </script>
 </head>
 <body>
 
-  <div id="loading">
-    <h2>Trwa sprawdzanie uprawnień...</h2>
-  </div>
+  <div id="loading"><h2>Trwa sprawdzanie uprawnień...</h2></div>
 
   <div id="content" class="hidden">
     <nav>
@@ -223,18 +319,37 @@
     <button id="btn-nowy-arkusz" style="margin:1.5rem 0;">Nowy arkusz ocen</button>
 
     <!-- Formularz tworzenia arkusza -->
-    <div id="form-arkusz" class="hidden" style="background:white; padding:1.5rem; border-radius:8px; border:1px solid #ddd;">
+    <div id="form-arkusz" class="hidden" style="background:white; padding:2rem; border-radius:8px; border:1px solid #ddd;">
       <h2>Nowy arkusz ocen</h2>
-      <input id="arkusz-nazwa" placeholder="Nazwa arkusza (np. Programowanie - Grupa 11)" style="width:100%;">
-
+      <input id="arkusz-nazwa" placeholder="Nazwa arkusza (np. JavaScript - Grupa 11)" style="width:100%; font-size:1.1rem;">
       <div style="margin-top:1.5rem;">
         <button id="btn-zapisz-arkusz">Utwórz arkusz</button>
         <button id="btn-anuluj" style="background:#757575; margin-left:1rem;">Anuluj</button>
       </div>
     </div>
 
-    <h2>Lista arkuszy ocen</h2>
-    <div id="arkusze-list"></div>
+    <!-- Główny arkusz do wypełniania -->
+    <div id="arkusz-form" class="hidden">
+      <h2 id="arkusz-tytul"></h2>
+      <button onclick="addUczienRow('')">+ Dodaj ucznia</button>
+      <button onclick="addKolumna()">+ Dodaj zadanie / datę</button>
+      <button onclick="saveArkusz()" style="background:#2e7d32;">Zapisz arkusz</button>
+      <button onclick="hide($('arkusz-form')); show($('arkusze-list'))" style="background:#757575;">Powrót do listy</button>
+
+      <table id="oceny-table">
+        <thead>
+          <tr>
+            <th class="uczniowie-col">Uczeń</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- Lista arkuszy -->
+    <div id="arkusze-list">
+      <h2>Lista arkuszy ocen</h2>
+    </div>
   </div>
 
 </body>
