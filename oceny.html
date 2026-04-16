@@ -139,7 +139,7 @@
 
       // Kolumny
       const headerRow = $("oceny-table").querySelector("thead tr");
-      headerRow.innerHTML = '<th class="uczniowie-col">Uczeń</th>';
+      headerRow.innerHTML = '<th class="uczniowie-col">Uczen</th>';
 
       if (data.kolumny && data.kolumny.length > 0) {
         data.kolumny.forEach(kol => addKolumnaZData(kol));
@@ -222,7 +222,7 @@
       doc.setFontSize(16);
       doc.text($("arkusz-tytul").textContent, 105, 15, { align: "center" });
 
-      const headers = ["Uczeń"];
+      const headers = ["Uczen"];
       document.querySelectorAll("#oceny-table thead th:not(.uczniowie-col)").forEach(th => {
         headers.push(th.textContent.trim().split('\n')[0]);
       });
@@ -324,7 +324,7 @@
       <table id="oceny-table">
         <thead>
           <tr>
-            <th class="uczniowie-col">Uczeń</th>
+            <th class="uczniowie-col">Uczen</th>
           </tr>
         </thead>
         <tbody></tbody>
